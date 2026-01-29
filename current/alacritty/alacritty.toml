@@ -1,0 +1,59 @@
+# Monochrome Alacritty Theme
+# Based on Zinc color palette
+
+[colors.bright]
+black = "0x52525b"
+blue = "0xa1a1aa"
+cyan = "0xd4d4d8"
+green = "0xa1a1aa"
+magenta = "0xa1a1aa"
+red = "0xef4444"
+white = "0xffffff"
+yellow = "0xd4d4d8"
+
+[colors.cursor]
+cursor = "0xffffff"
+text = "0x18181b"
+
+[colors.normal]
+black = "0x18181b"
+blue = "0x71717a"
+cyan = "0xa1a1aa"
+green = "0x71717a"
+magenta = "0x71717a"
+red = "0xef4444"
+white = "0xe5e7eb"
+yellow = "0xa1a1aa"
+
+[colors.primary]
+background = "0x18181b"
+foreground = "0xe5e7eb"
+
+[font]
+size = 13.5
+
+[font.normal]
+family = "JetBrainsMono Nerd Font"
+
+[window]
+decorations = "none"
+opacity = 1.0
+
+[window.padding]
+x = 10
+y = 10
+
+[scrolling]
+history = 10000
+multiplier = 3
+
+[keyboard]
+bindings = [
+  { key = "Up", mods = "Shift", action = "ScrollLineUp" },
+  { key = "Down", mods = "Shift", action = "ScrollLineDown" },
+  { key = "Up", mods = "Control|Shift", action = "ScrollPageUp" },
+  { key = "Down", mods = "Control|Shift", action = "ScrollPageDown" },
+  { key = "Return", mods = "Shift", chars = "\u001b\r" },
+]
+
+[terminal]

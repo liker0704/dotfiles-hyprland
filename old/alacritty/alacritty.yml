@@ -1,0 +1,55 @@
+# alacritty.yml
+
+# Настройки окна
+window:
+  # Убираем стандартную рамку окна и заголовок (ДЕЛАЕТ ПАНЕЛЬ МИНИМАЛЬНОЙ)
+  # Возможные значения: 'Full', 'None'
+  decorations: none
+
+  # Внутренние отступы от края окна до текста
+  padding:
+    x: 10
+    y: 10
+
+  # Прозрачность фона (0.0 - полностью прозрачный, 1.0 - непрозрачный)
+  opacity: 0.95
+
+# Настройки шрифта
+font:
+  normal:
+    # Указываем тот же шрифт, что и для Powerlevel10k
+    family: "FiraCode Nerd Font"
+  size: 11.0
+
+# Цветовая схема (пример - Dracula)
+# Другие схемы можно найти здесь: https://github.com/alacritty/alacritty-theme
+colors:
+  primary:
+    background: '0x282a36'
+    foreground: '0xf8f8f2'
+  cursor:
+    text:   '0x44475a'
+    cursor: '0xf8f8f2'
+  normal:
+    black:   '0x000000'
+    red:     '0xff5555'
+    green:   '0x50fa7b'
+    yellow:  '0xf1fa8c'
+    blue:    '0xbd93f9'
+    magenta: '0xff79c6'
+    cyan:    '0x8be9fd'
+    white:   '0xbfbfbf'
+  bright:
+    black:   '0x4d4d4d'
+    red:     '0xff6e67'
+    green:   '0x5af78e'
+    yellow:  '0xf4f99d'
+    blue:    '0xc4a5f5'
+    magenta: '0xff92d0'
+    cyan:    '0x9aedfe'
+    white:   '0xe6e6e6'
+
+# Настройки оболочки
+# Убедимся, что по умолчанию запускается Zsh
+shell:
+  program: /bin/zsh

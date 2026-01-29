@@ -1,0 +1,59 @@
+// Minimal zellij config
+
+// Fix for Alacritty - disable kitty keyboard protocol
+support_kitty_keyboard_protocol false
+
+// No UI clutter
+simplified_ui true
+pane_frames false
+default_layout "minimal"
+
+// Start in locked mode - all keys go to shell
+// Press Ctrl+G to unlock and access zellij commands
+default_mode "locked"
+
+// Theme
+theme "monochrome"
+
+themes {
+    monochrome {
+        fg "#e5e7eb"
+        bg "#18181b"
+        black "#18181b"
+        red "#ef4444"
+        green "#a1a1aa"
+        yellow "#d4d4d8"
+        blue "#71717a"
+        magenta "#a1a1aa"
+        cyan "#d4d4d8"
+        white "#e5e7eb"
+        orange "#a1a1aa"
+    }
+}
+
+// Keybinds - only override what we need
+keybinds {
+    // Alt keys work in any mode (including locked)
+    shared_except "locked" {
+        bind "Ctrl g" { SwitchToMode "locked"; }
+    }
+
+    locked {
+        bind "Ctrl g" { SwitchToMode "normal"; }
+    }
+
+    // Alt shortcuts always work
+    shared {
+        bind "Alt n" { NewPane; }
+        bind "Alt h" { MoveFocus "Left"; }
+        bind "Alt j" { MoveFocus "Down"; }
+        bind "Alt k" { MoveFocus "Up"; }
+        bind "Alt l" { MoveFocus "Right"; }
+        bind "Alt 1" { GoToTab 1; }
+        bind "Alt 2" { GoToTab 2; }
+        bind "Alt 3" { GoToTab 3; }
+        bind "Alt t" { NewTab; }
+        bind "Alt x" { CloseFocus; }
+        bind "Alt f" { ToggleFocusFullscreen; }
+    }
+}

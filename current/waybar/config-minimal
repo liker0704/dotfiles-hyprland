@@ -1,0 +1,103 @@
+{
+  "layer": "top",
+  "position": "top",
+  "spacing": 0,
+  "margin-top": 4,
+  "margin-left": 8,
+  "margin-right": 8,
+  "modules-left": [
+    "hyprland/workspaces"
+  ],
+  "modules-center": [
+    "clock"
+  ],
+  "modules-right": [
+    "tray",
+    "bluetooth",
+    "network",
+    "pulseaudio",
+    "backlight",
+    "battery",
+    "custom/power"
+  ],
+
+  "hyprland/workspaces": {
+    "format": "{name}",
+    "on-click": "activate",
+    "sort-by-number": true
+  },
+
+  "clock": {
+    "tooltip": true,
+    "format": "{:%H:%M  •  %a, %d %b}",
+    "format-alt": "{:%H:%M:%S}",
+    "interval": 1,
+    "tooltip-format": "<tt>{calendar}</tt>"
+  },
+
+  "tray": {
+    "icon-size": 18,
+    "spacing": 8
+  },
+
+  "bluetooth": {
+    "format": "󰂲",
+    "format-on": "󰂯",
+    "format-off": "󰂲",
+    "format-connected": "󰂱",
+    "on-click": "blueman-manager",
+    "tooltip-format-connected": "{device_enumerate}"
+  },
+
+  "network": {
+    "format-wifi": "󰤢",
+    "format-ethernet": "󰈀",
+    "format-disconnected": "󰤠",
+    "interval": 5,
+    "tooltip-format": "{essid} ({signalStrength}%)\n{ipaddr}",
+    "on-click-right": "nm-connection-editor"
+  },
+
+  "pulseaudio": {
+    "format": "{icon} {volume}%",
+    "format-bluetooth": "󰂰 {volume}%",
+    "format-muted": "󰝟",
+    "format-icons": {
+      "headphone": "󰋋",
+      "default": ["󰕿", "󰖀", "󰕾"]
+    },
+    "scroll-step": 5,
+    "on-click": "$HOME/.config/hypr/scripts/Volume.sh --toggle",
+    "on-click-right": "pavucontrol -t 3",
+    "on-scroll-up": "$HOME/.config/hypr/scripts/Volume.sh --inc",
+    "on-scroll-down": "$HOME/.config/hypr/scripts/Volume.sh --dec",
+    "tooltip-format": "{desc}\nVolume: {volume}%"
+  },
+
+  "backlight": {
+    "format": "{icon}",
+    "format-icons": ["󱩎", "󱩏", "󱩐", "󱩑", "󱩒", "󱩓", "󱩔"],
+    "tooltip-format": "Brightness: {percent}%",
+    "on-scroll-up": "$HOME/.config/hypr/scripts/Brightness.sh --inc",
+    "on-scroll-down": "$HOME/.config/hypr/scripts/Brightness.sh --dec"
+  },
+
+  "battery": {
+    "interval": 5,
+    "states": {
+      "warning": 30,
+      "critical": 15
+    },
+    "format": "{icon} {capacity}%",
+    "format-charging": "󰂄 {capacity}%",
+    "format-plugged": "󰚥 {capacity}%",
+    "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
+    "tooltip-format": "{timeTo}\n{power}W"
+  },
+
+  "custom/power": {
+    "format": "⏻",
+    "tooltip": false,
+    "on-click": "$HOME/.config/hypr/scripts/Wlogout.sh"
+  }
+}
