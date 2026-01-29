@@ -5,6 +5,7 @@ support_kitty_keyboard_protocol false
 
 // No UI clutter
 simplified_ui true
+styled_underlines false
 pane_frames false
 default_layout "minimal"
 

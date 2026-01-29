@@ -15,6 +15,10 @@ yellow = "0xd4d4d8"
 cursor = "0xffffff"
 text = "0x18181b"
 
+[colors.selection]
+background = "0x52525b"
+text = "0xffffff"
+
 [colors.normal]
 black = "0x18181b"
 blue = "0x71717a"
