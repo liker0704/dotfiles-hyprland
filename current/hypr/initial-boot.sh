@@ -35,7 +35,7 @@ if [ ! -f "$HOME/.config/hypr/.initial_startup_done" ]; then
     gsettings set org.gnome.desktop.interface gtk-theme $gtk_theme > /dev/null 2>&1 &
     gsettings set org.gnome.desktop.interface icon-theme $icon_theme > /dev/null 2>&1 &
     gsettings set org.gnome.desktop.interface cursor-theme $cursor_theme > /dev/null 2>&1 &
-    gsettings set org.gnome.desktop.interface cursor-size 24 > /dev/null 2>&1 &
+    gsettings set org.gnome.desktop.interface cursor-size 20 > /dev/null 2>&1 &
 
      # NIXOS initiate GTK dark mode and apply icon and cursor theme
 	if [ -n "$(grep -i nixos < /etc/os-release)" ]; then
@@ -43,7 +43,7 @@ if [ ! -f "$HOME/.config/hypr/.initial_startup_done" ]; then
       dconf write /org/gnome/desktop/interface/gtk-theme "'$gtk_theme'" > /dev/null 2>&1 &
       dconf write /org/gnome/desktop/interface/icon-theme "'$icon_theme'" > /dev/null 2>&1 &
       dconf write /org/gnome/desktop/interface/cursor-theme "'$cursor_theme'" > /dev/null 2>&1 &
-      dconf write /org/gnome/desktop/interface/cursor-size "24" > /dev/null 2>&1 &
+      dconf write /org/gnome/desktop/interface/cursor-size "20" > /dev/null 2>&1 &
 	fi
        
     # initiate kvantum theme

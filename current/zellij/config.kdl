@@ -45,6 +45,8 @@ keybinds {
     // Alt shortcuts always work
     shared {
         bind "Alt n" { NewPane; }
+        bind "Alt v" { NewPane "Right"; }
+        bind "Alt b" { NewPane "Down"; }
         bind "Alt h" { MoveFocus "Left"; }
         bind "Alt j" { MoveFocus "Down"; }
         bind "Alt k" { MoveFocus "Up"; }
@@ -55,5 +57,12 @@ keybinds {
         bind "Alt t" { NewTab; }
         bind "Alt x" { CloseFocus; }
         bind "Alt f" { ToggleFocusFullscreen; }
+        bind "Alt d" { Detach; }
+        bind "Alt s" {
+            LaunchOrFocusPlugin "session-manager" {
+                floating true
+                move_to_focused_tab true
+            }
+        }
     }
 }

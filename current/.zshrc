@@ -24,12 +24,23 @@ ZSH_DISABLE_COMPFIX=true
 ZSH_THEME="powerlevel10k/powerlevel10k"
 
 # Здесь указываются плагины (через пробел).
-# Добавил стандартные полезные плагины для тебя.
-plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
+# syntax-highlighting ДОЛЖЕН быть последним!
+plugins=(git zsh-autosuggestions)
+
+# --- Оптимизация для устранения подёргивания курсора ---
+ZSH_HIGHLIGHT_MAXLENGTH=512
+ZSH_HIGHLIGHT_HIGHLIGHTERS=(main)
+ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE=20
+ZSH_AUTOSUGGEST_USE_ASYNC=1
+ZSH_AUTOSUGGEST_MANUAL_REBIND=1
+DISABLE_MAGIC_FUNCTIONS=true
 
 # ЭТА СТРОКА - САМАЯ ГЛАВНАЯ. Она запускает Oh My Zsh.
 # Она должна идти ПОСЛЕ ZSH_THEME и plugins.
 source $ZSH/oh-my-zsh.sh
+
+# Отключить подсветку при вставке текста
+zle_highlight+=(paste:none)
 
 # -------------------------------------------------------------------
 # ### ТВОИ ПЕРСОНАЛЬНЫЕ НАСТРОЙКИ (ИДУТ ПОСЛЕ ЗАГРУЗКИ OH MY ZSH) ###

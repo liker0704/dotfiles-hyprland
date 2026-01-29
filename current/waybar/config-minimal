@@ -12,6 +12,7 @@
     "clock"
   ],
   "modules-right": [
+    "hyprland/language",
     "tray",
     "bluetooth",
     "network",
@@ -33,6 +34,12 @@
     "format-alt": "{:%H:%M:%S}",
     "interval": 1,
     "tooltip-format": "<tt>{calendar}</tt>"
+  },
+
+  "hyprland/language": {
+    "format": "{}",
+    "format-en": "EN",
+    "format-ru": "RU"
   },
 
   "tray": {
