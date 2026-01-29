@@ -25,7 +25,7 @@ ZSH_THEME="powerlevel10k/powerlevel10k"
 
 # Здесь указываются плагины (через пробел).
 # syntax-highlighting ДОЛЖЕН быть последним!
-plugins=(git zsh-autosuggestions)
+plugins=(git zsh-autosuggestions fast-syntax-highlighting)
 
 # --- Оптимизация для устранения подёргивания курсора ---
 ZSH_HIGHLIGHT_MAXLENGTH=512
