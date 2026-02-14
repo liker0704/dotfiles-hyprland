@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# theme — unified desktop color management
+# theme — unified desktop color + font management
 # Syncs palette to: kitty, neovim, zellij, hyprland, hyprlock, waybar, rofi, swaync
 #
 # Usage:
@@ -8,10 +8,13 @@
 #   theme search <q> [--dark|--light|--good]
 #   theme list [dark|light] [--good]
 #   theme generate [dark|light] [--wild] [--seed=HEX]
-#   theme random [dark|light]      random quality theme
+#   theme random [dark|light] [--no-font]  random quality theme
 #   theme save <name>              save current as custom theme
 #   theme remove <name>            remove custom theme
 #   theme import [file|url]        import (kitty/Xresources/clipboard)
+#   theme font                     show current font + installed
+#   theme font set <name>          set mono Nerd Font everywhere
+#   theme font random              random Nerd Font
 #   theme sync                     apply palette to all configs
 #   theme animations [on|off]      toggle Hyprland animations
 #   theme current                  show current palette
@@ -394,8 +397,22 @@ cursor={cursor if cursor else c[5]}
 url={c[5]}
 """
 
+# Preserve existing font from palette (Gogh themes don't have font)
+existing_font = ""
+if os.path.exists("$PALETTE"):
+    with open("$PALETTE") as pf:
+        for pline in pf:
+            if pline.startswith("font="):
+                existing_font = pline.strip()
+                break
+
+theme_font = match.get("font", "")
+font_line = f"font={theme_font}" if theme_font else existing_font
+
 with open("$PALETTE", 'w') as f:
     f.write(palette)
+    if font_line:
+        f.write(f"\n# Font\n{font_line}\n")
 
 source_tag = "\033[35m(custom)\033[0m" if is_custom else "\033[2m(Gogh)\033[0m"
 print(f"\033[32m  Theme set: {match['name']}\033[0m {source_tag}")
@@ -410,10 +427,19 @@ for i in range(1, 17):
         colors += " "
 print(f"  {colors}")
 print(f"  \033[2mbg:#{bg} fg:#{fg}\033[0m")
+if font_line:
+    print(f"  \033[2m{font_line}\033[0m")
 PYEOF
 
   if [[ $? -eq 0 ]]; then
     apply_palette
+    # If theme had font, apply it too
+    local theme_font
+    theme_font=$(get_current_font)
+    if [[ -n "$theme_font" ]]; then
+      echo -e "  ${DIM}Applying font:${RESET} $theme_font"
+      apply_font "$theme_font"
+    fi
   fi
 }
 
@@ -558,6 +584,9 @@ cmd_current() {
   done
   echo ""
   echo -e "  ${DIM}bg:#${C[bg]} fg:#${C[fg]}${RESET}"
+  local cur_font
+  cur_font=$(get_current_font)
+  [[ -n "$cur_font" ]] && echo -e "  ${DIM}font: $cur_font${RESET}"
 }
 
 # --- Save current palette as custom theme ---
@@ -612,6 +641,10 @@ theme = {
     "fg_muted": "#" + C.get("fg_muted", ""),
     "border": "#" + C.get("border", ""),
 }
+# Add font if present in palette
+font = C.get("font", "")
+if font:
+    theme["font"] = font
 # Remove empty extra fields
 theme = {k: v for k, v in theme.items() if v != "#"}
 
@@ -674,12 +707,13 @@ PYEOF
 
 # --- Generate random palette ---
 cmd_generate() {
-  local mode="dark" wild="" seed=""
+  local mode="dark" wild="" seed="" no_font=""
   for arg in "$@"; do
     case "$arg" in
       dark|light) mode="$arg" ;;
       --wild) wild="true" ;;
       --seed=*) seed="${arg#--seed=}" ;;
+      --no-font) no_font="true" ;;
     esac
   done
   echo -e "  ${DIM}Generating...${RESET}"
@@ -844,12 +878,28 @@ PYEOF
 
   if [[ $? -eq 0 ]]; then
     apply_palette
+    # Also randomize font unless --no-font
+    if [[ -z "$no_font" ]]; then
+      local fonts pick
+      fonts=$(get_nerd_fonts)
+      pick=$(echo "$fonts" | shuf -n1)
+      if [[ -n "$pick" ]]; then
+        echo -e "  ${DIM}Random font:${RESET} $pick"
+        apply_font "$pick"
+      fi
+    fi
   fi
 }
 
 # --- Random quality theme ---
 cmd_random() {
-  local filter="${1:-}"
+  local filter="" no_font=""
+  for arg in "$@"; do
+    case "$arg" in
+      --no-font) no_font="true" ;;
+      dark|light) filter="$arg" ;;
+    esac
+  done
   ensure_cache
   local name
   name=$(RAND_FILTER="$filter" RAND_GOGH="$GOGH_CACHE" RAND_CUSTOM="$CUSTOM_THEMES" python3 << 'PYEOF'
@@ -921,6 +971,16 @@ PYEOF
 
   if [[ -n "$name" ]]; then
     cmd_set "$name"
+    # Also randomize font unless --no-font
+    if [[ -z "$no_font" ]]; then
+      local fonts pick
+      fonts=$(get_nerd_fonts)
+      pick=$(echo "$fonts" | shuf -n1)
+      if [[ -n "$pick" ]]; then
+        echo -e "  ${DIM}Random font:${RESET} $pick"
+        apply_font "$pick"
+      fi
+    fi
   else
     echo -e "${RED}  No quality themes found${RESET}"
   fi
@@ -1004,6 +1064,177 @@ ANIMEOF
   esac
 }
 
+# --- Get installed monospace Nerd Fonts ---
+get_nerd_fonts() {
+  # Get non-Mono variants first, then Mono-only fonts (like Iosevka)
+  local non_mono mono_only
+  non_mono=$(fc-list :spacing=100 family | sed 's/,.*//' | grep "Nerd Font" | grep -v "Nerd Font Mono" | grep -v "MonoNL\|NerdFont" | sort -u)
+  mono_only=$(fc-list :spacing=100 family | sed 's/,.*//' | grep "Nerd Font Mono" | grep -v "MonoNL\|NerdFont" | sort -u | while read -r f; do
+    base="${f% Mono}"
+    echo "$non_mono" | grep -qF "$base" || echo "$f"
+  done)
+  { echo "$non_mono"; echo "$mono_only"; } | grep -v '^$' | sort -u
+}
+
+# --- Get current font from palette.conf ---
+get_current_font() {
+  if [[ -f "$PALETTE" ]]; then
+    grep '^font=' "$PALETTE" 2>/dev/null | cut -d= -f2-
+  fi
+}
+
+# --- Apply font to all configs ---
+apply_font() {
+  local FONT="$1"
+  [[ -z "$FONT" ]] && return 1
+
+  # 1. Update palette.conf
+  if grep -q '^font=' "$PALETTE" 2>/dev/null; then
+    sed -i "s/^font=.*/font=$FONT/" "$PALETTE"
+  else
+    echo "" >> "$PALETTE"
+    echo "# Font" >> "$PALETTE"
+    echo "font=$FONT" >> "$PALETTE"
+  fi
+
+  # 2. Kitty
+  local KITTY_CONF="$HOME/.config/kitty/kitty.conf"
+  if [[ -f "$KITTY_CONF" ]]; then
+    sed -i "s/^font_family .*/font_family $FONT/" "$KITTY_CONF"
+    echo -e "    ${GREEN}kitty${RESET} → $FONT"
+  fi
+
+  # 3. Alacritty
+  local ALACRITTY_CONF="$HOME/.config/alacritty/alacritty.toml"
+  if [[ -f "$ALACRITTY_CONF" ]]; then
+    sed -i 's/^family = ".*"/family = "'"$FONT"'"/' "$ALACRITTY_CONF"
+    echo -e "    ${GREEN}alacritty${RESET}"
+  fi
+
+  # 4. Waybar — update existing CSS if present (heredoc regenerated on next theme sync)
+  local WAYBAR_CSS="$HOME/.config/waybar/style-minimal.css"
+  if [[ -f "$WAYBAR_CSS" ]]; then
+    sed -i 's/font-family: "[^"]*Nerd Font[^"]*"/font-family: "'"$FONT"'"/' "$WAYBAR_CSS"
+    echo -e "    ${GREEN}waybar${RESET}"
+  fi
+
+  # 5. Rofi
+  local ROFI_FONTS="$HOME/.config/rofi/0-shared-fonts.rasi"
+  if [[ -f "$ROFI_FONTS" ]]; then
+    sed -i 's/"[^"]*Nerd Font[^"]*SemiBold/"'"$FONT"' SemiBold/g' "$ROFI_FONTS"
+    echo -e "    ${GREEN}rofi${RESET}"
+  fi
+
+  # 6. SwayNC
+  local SWAYNC_STYLE="$HOME/.config/swaync/style.css"
+  if [[ -f "$SWAYNC_STYLE" ]]; then
+    sed -i 's/font-family: "[^"]*Nerd Font[^"]*"/font-family: "'"$FONT"'"/' "$SWAYNC_STYLE"
+    echo -e "    ${GREEN}swaync${RESET}"
+  fi
+
+  # 7. Hyprlock (clock line only — ExtraBold)
+  for hl in "$HOME/.config/hypr/hyprlock.conf" "$HOME/.config/hypr/hyprlock-2k.conf"; do
+    if [[ -f "$hl" ]]; then
+      sed -i 's/font_family = .*ExtraBold/font_family = '"$FONT"' ExtraBold/' "$hl"
+    fi
+  done
+  echo -e "    ${GREEN}hyprlock${RESET}"
+
+  # Reload
+  if pgrep -x kitty &>/dev/null; then
+    kill -SIGUSR1 $(pgrep -x kitty) 2>/dev/null
+  fi
+  if pgrep -x swaync &>/dev/null; then
+    swaync-client -rs &>/dev/null
+  fi
+  if pgrep -x waybar &>/dev/null; then
+    pkill waybar; sleep 0.3; waybar &>/dev/null & disown
+  fi
+}
+
+# --- Font commands ---
+cmd_font() {
+  local subcmd="${1:-}"
+  local arg="${2:-}"
+
+  case "$subcmd" in
+    set)
+      [[ -z "$arg" ]] && { echo -e "${RED}Usage: theme font set <name>${RESET}"; exit 1; }
+      local fonts match
+      fonts=$(get_nerd_fonts)
+
+      # Exact match (case-insensitive)
+      match=$(echo "$fonts" | grep -i "^${arg}$" | head -1)
+
+      # Partial match
+      if [[ -z "$match" ]]; then
+        local partial
+        partial=$(echo "$fonts" | grep -i "$arg")
+        local count
+        count=$(echo "$partial" | grep -c .)
+        if [[ "$count" -eq 1 ]]; then
+          match="$partial"
+        elif [[ "$count" -gt 1 ]]; then
+          echo -e "  ${YELLOW}Multiple matches for '$arg':${RESET}"
+          echo "$partial" | while read -r f; do echo "    - $f"; done
+          echo -e "\n  Be more specific."
+          return 1
+        fi
+      fi
+
+      if [[ -z "$match" ]]; then
+        echo -e "  ${RED}Font '$arg' not found${RESET}"
+        echo -e "\n  ${DIM}Installed Nerd Fonts:${RESET}"
+        get_nerd_fonts | while read -r f; do echo "    $f"; done
+        return 1
+      fi
+
+      echo -e "  ${BOLD}Setting font:${RESET} $match"
+      apply_font "$match"
+      echo -e "  ${BOLD}Done!${RESET}"
+      ;;
+
+    random)
+      local fonts current
+      fonts=$(get_nerd_fonts)
+      current=$(get_current_font)
+      local pick
+      pick=$(echo "$fonts" | grep -v "^${current}$" | shuf -n1)
+      if [[ -z "$pick" ]]; then
+        echo -e "  ${RED}No other fonts available${RESET}"
+        return 1
+      fi
+      echo -e "  ${BOLD}Random font:${RESET} $pick"
+      apply_font "$pick"
+      echo -e "  ${BOLD}Done!${RESET}"
+      ;;
+
+    list|"")
+      local fonts current
+      fonts=$(get_nerd_fonts)
+      current=$(get_current_font)
+      [[ -z "$current" ]] && current="JetBrainsMono Nerd Font"
+      echo ""
+      echo -e "  ${BOLD}Current font:${RESET} $current"
+      echo ""
+      echo -e "  ${DIM}Installed Nerd Fonts:${RESET}"
+      echo "$fonts" | while read -r f; do
+        if [[ "$f" == "$current" ]]; then
+          echo -e "    ${GREEN}*${RESET} $f  ${DIM}(current)${RESET}"
+        else
+          echo "      $f"
+        fi
+      done
+      echo ""
+      ;;
+
+    *)
+      echo -e "${RED}Usage: theme font [set <name>|random|list]${RESET}"
+      exit 1
+      ;;
+  esac
+}
+
 # --- Apply palette to all configs ---
 apply_palette() {
   if [[ ! -f "$PALETTE" ]]; then
@@ -1017,6 +1248,11 @@ apply_palette() {
     key=$(echo "$key" | xargs); val=$(echo "$val" | xargs)
     [[ -n "$key" && -n "$val" ]] && C[$key]="$val"
   done < "$PALETTE"
+
+  # Read font from palette (for waybar heredoc)
+  local FONT
+  FONT=$(grep '^font=' "$PALETTE" 2>/dev/null | cut -d= -f2-)
+  [[ -z "$FONT" ]] && FONT="JetBrainsMono Nerd Font"
 
   ensure_backup
   echo "  Syncing..."
@@ -1179,7 +1415,7 @@ EOF
 /* Monochrome Minimal Waybar - R7 Style */
 
 * {
-  font-family: "JetBrainsMono Nerd Font", "NotoSans Nerd Font", sans-serif;
+  font-family: "${FONT}", "NotoSans Nerd Font", sans-serif;
   font-size: 13px;
   font-weight: 500;
   min-height: 0;
@@ -1458,9 +1694,13 @@ cmd_help() {
   echo -e "    theme dark/light ${DIM}[query]${RESET}     browse by type"
   echo -e "    theme generate ${DIM}[dark|light]${RESET} ${DIM}[--wild] [--seed=HEX]${RESET}"
   echo -e "                                 generate random harmonious palette"
-  echo -e "    theme random ${DIM}[dark|light]${RESET}    random quality theme from Gogh"
+  echo -e "    theme random ${DIM}[dark|light]${RESET} ${DIM}[--no-font]${RESET}"
+  echo -e "                                 random quality theme + font"
   echo -e "    theme save ${DIM}<name>${RESET}             save current palette as custom theme"
   echo -e "    theme remove ${DIM}<name>${RESET}           remove custom theme"
+  echo -e "    theme font                   show current font + installed Nerd Fonts"
+  echo -e "    theme font set ${DIM}<name>${RESET}        set mono Nerd Font everywhere"
+  echo -e "    theme font random            random Nerd Font"
   echo -e "    theme sync                   apply palette to all desktop configs"
   echo -e "    theme import ${DIM}[file|url]${RESET}      import theme (kitty/Xresources, or clipboard)"
   echo -e "    theme current                show current theme details"
@@ -1487,9 +1727,10 @@ case "${1:-}" in
   dark)       cmd_search --dark "$2" ;;
   light)      cmd_search --light "$2" ;;
   generate)   shift; cmd_generate "$@" ;;
-  random)     cmd_random "$2" ;;
+  random)     shift; cmd_random "$@" ;;
   save)       cmd_save "$2" ;;
   remove)     cmd_remove "$2" ;;
+  font)       shift; cmd_font "$@" ;;
   sync)       apply_palette ;;
   import)     cmd_import "$2" ;;
   update)     cmd_update ;;
