@@ -1271,6 +1271,15 @@ apply_palette() {
     shadow="rgba(0, 0, 0, 0.3)"
   fi
 
+  # --- System color-scheme (GTK/Qt/browsers via xdg-desktop-portal) ---
+  if command -v gsettings &>/dev/null; then
+    if $is_light; then
+      gsettings set org.gnome.desktop.interface color-scheme 'default'
+    else
+      gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+    fi
+  fi
+
   ensure_backup
   echo "  Syncing..."
 
