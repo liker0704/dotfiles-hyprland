@@ -1,5 +1,9 @@
 # --- Zellij auto-start (MUST BE FIRST) ---
 if [[ -z "$ZELLIJ" && -t 1 ]]; then
+    # Kill dead/exited sessions on startup
+    zellij list-sessions -n -s 2>/dev/null | grep "EXITED" | awk '{print $1}' | while read -r s; do
+        zellij delete-session "$s" 2>/dev/null
+    done
     exec zellij attach -c main
 fi
 
@@ -27,9 +31,7 @@ ZSH_THEME="powerlevel10k/powerlevel10k"
 # syntax-highlighting ДОЛЖЕН быть последним!
 plugins=(git zsh-autosuggestions)
 
-# --- Оптимизация для устранения подёргивания курсора ---
-ZSH_HIGHLIGHT_MAXLENGTH=512
-ZSH_HIGHLIGHT_HIGHLIGHTERS=(main)
+# --- Оптимизация autosuggestions ---
 ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE=20
 ZSH_AUTOSUGGEST_USE_ASYNC=1
 ZSH_AUTOSUGGEST_MANUAL_REBIND=1
@@ -77,14 +79,14 @@ nix-install() {
 
 # --- Conda Initialize ---
 # !! Блок Conda всегда должен быть в конце !!
-__conda_setup="$('/home/liker/anaconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
+__conda_setup="$('/home/liker/miniconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
 if [ $? -eq 0 ]; then
     eval "$__conda_setup"
 else
-    if [ -f "/home/liker/anaconda3/etc/profile.d/conda.sh" ]; then
-        . "/home/liker/anaconda3/etc/profile.d/conda.sh"
+    if [ -f "/home/liker/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "/home/liker/miniconda3/etc/profile.d/conda.sh"
     else
-        export PATH="/home/liker/anaconda3/bin:$PATH"
+        export PATH="/home/liker/miniconda3/bin:$PATH"
     fi
 fi
 unset __conda_setup
@@ -101,6 +103,15 @@ alias ge="gemini --yolo"
 alias nv="nvim"
 alias zj="zellij attach -c main"
 
+# Yazi wrapper - changes dir on exit (q), stays in place on Q
+function y() {
+	local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
+	yazi "$@" --cwd-file="$tmp"
+	IFS= read -r -d '' cwd < "$tmp"
+	[ -n "$cwd" ] && [ "$cwd" != "$PWD" ] && cd -- "$cwd"
+	rm -f -- "$tmp"
+}
+
 eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 
 # bun completions
@@ -113,3 +124,9 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 # Go binaries
 export PATH="$PATH:$HOME/go/bin"
 
+# User scripts
+export PATH="$PATH:$HOME/scripts"
+
+
+# opencode
+export PATH=/home/liker/.opencode/bin:$PATH

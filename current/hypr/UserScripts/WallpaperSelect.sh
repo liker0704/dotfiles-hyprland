@@ -200,7 +200,7 @@ apply_video_wallpaper() {
   kill_wallpaper_for_video
 
   # Apply video wallpaper using mpvpaper
-  mpvpaper '*' -o "load-scripts=no no-audio --loop" "$video_path" &
+  "$HOME/.local/bin/mpvpaper" -f -o "load-scripts=no no-audio --loop --hwdec=auto" "$focused_monitor" "$video_path" &
 }
 
 # Main function
