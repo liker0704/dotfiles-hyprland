@@ -8,7 +8,7 @@
 #   theme list                  — list all Gogh themes
 #   theme save <name>            — save current palette as custom theme
 #   theme remove <name>          — remove custom theme
-#   theme import <file|url>     — import kitty theme file
+#   theme import [file|url]     — import theme (kitty/Xresources/clipboard)
 #   theme update                — update Gogh themes cache
 #   theme current               — show current palette
 
@@ -331,37 +331,71 @@ PYEOF
   fi
 }
 
-# --- Import kitty theme file ---
+# --- Import theme (file, URL, or clipboard) ---
 cmd_import() {
-  local src="$1"
-  [[ -z "$src" ]] && { echo -e "${RED}Usage: theme import <file|url>${RESET}"; exit 1; }
-
+  local src="$1" label="clipboard"
   local tmpfile=""
-  if [[ "$src" == http* ]]; then
+
+  if [[ -z "$src" ]]; then
+    # No arg — read from clipboard
+    if ! command -v wl-paste &>/dev/null; then
+      echo -e "${RED}wl-paste not found (install wl-clipboard)${RESET}"
+      exit 1
+    fi
     tmpfile=$(mktemp)
-    echo "Downloading..."
-    curl -sL "$src" -o "$tmpfile" || { echo "Download failed"; exit 1; }
+    wl-paste --no-newline > "$tmpfile" 2>/dev/null
+    if [[ ! -s "$tmpfile" ]]; then
+      rm -f "$tmpfile"
+      echo -e "${RED}Clipboard is empty${RESET}"
+      exit 1
+    fi
     src="$tmpfile"
+    echo -e "  ${DIM}Reading from clipboard...${RESET}"
+  elif [[ "$src" == http* ]]; then
+    label="$(basename "$src")"
+    tmpfile=$(mktemp)
+    echo -e "  ${DIM}Downloading...${RESET}"
+    curl -sL "$src" -o "$tmpfile" || { echo -e "${RED}Download failed${RESET}"; exit 1; }
+    src="$tmpfile"
+  else
+    label="$(basename "$src")"
+    [[ ! -f "$src" ]] && { echo -e "${RED}File not found: $src${RESET}"; exit 1; }
   fi
 
-  [[ ! -f "$src" ]] && { echo "File not found: $src"; exit 1; }
-
-  get() { grep -iE "^$1\b" "$src" | head -1 | grep -oP '#?\K[0-9a-fA-F]{6}' | head -1; }
+  # Auto-detect: Xresources or kitty
+  local is_xres=false
+  if grep -qE '^\*\.?color[0-9]+:' "$src" 2>/dev/null; then
+    is_xres=true
+  fi
 
   local bg fg cursor sel_bg
-  bg=$(get "background"); fg=$(get "foreground"); cursor=$(get "cursor[^_]"); sel_bg=$(get "selection_background")
-
   local c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15
-  c0=$(get "color0[^0-9]"); c1=$(get "color1[^0-9]"); c2=$(get "color2[^0-9]"); c3=$(get "color3[^0-9]")
-  c4=$(get "color4[^0-9]"); c5=$(get "color5[^0-9]"); c6=$(get "color6[^0-9]"); c7=$(get "color7[^0-9]")
-  c8=$(get "color8[^0-9]"); c9=$(get "color9[^0-9]"); c10=$(get "color10"); c11=$(get "color11")
-  c12=$(get "color12"); c13=$(get "color13"); c14=$(get "color14"); c15=$(get "color15")
 
-  [[ -z "$bg" || -z "$fg" ]] && { echo "Error: can't parse background/foreground"; exit 1; }
+  if $is_xres; then
+    # Xresources: *.color0: #1a1b26  or  *color0: #1a1b26
+    xget() { grep -iE '^\*\.?'"$1"':' "$src" | head -1 | grep -oP '#?\K[0-9a-fA-F]{6}' | head -1; }
+    bg=$(xget "background"); fg=$(xget "foreground"); cursor=$(xget "cursorColor")
+    c0=$(xget "color0"); c1=$(xget "color1"); c2=$(xget "color2"); c3=$(xget "color3")
+    c4=$(xget "color4"); c5=$(xget "color5"); c6=$(xget "color6"); c7=$(xget "color7")
+    c8=$(xget "color8"); c9=$(xget "color9"); c10=$(xget "color10"); c11=$(xget "color11")
+    c12=$(xget "color12"); c13=$(xget "color13"); c14=$(xget "color14"); c15=$(xget "color15")
+  else
+    # Kitty: color0 #1a1b26
+    get() { grep -iE "^$1\b" "$src" | head -1 | grep -oP '#?\K[0-9a-fA-F]{6}' | head -1; }
+    bg=$(get "background"); fg=$(get "foreground"); cursor=$(get "cursor[^_]"); sel_bg=$(get "selection_background")
+    c0=$(get "color0[^0-9]"); c1=$(get "color1[^0-9]"); c2=$(get "color2[^0-9]"); c3=$(get "color3[^0-9]")
+    c4=$(get "color4[^0-9]"); c5=$(get "color5[^0-9]"); c6=$(get "color6[^0-9]"); c7=$(get "color7[^0-9]")
+    c8=$(get "color8[^0-9]"); c9=$(get "color9[^0-9]"); c10=$(get "color10"); c11=$(get "color11")
+    c12=$(get "color12"); c13=$(get "color13"); c14=$(get "color14"); c15=$(get "color15")
+  fi
+
+  [[ -z "$bg" || -z "$fg" ]] && { echo -e "${RED}Can't parse colors. Supported: kitty .conf, Xresources${RESET}"; rm -f "$tmpfile"; exit 1; }
+
+  local fmt="kitty"; $is_xres && fmt="Xresources"
 
   cat > "$PALETTE" << EOF
 # Terminal color palette — single source of truth
-# Imported from: $(basename "$1")
+# Imported from: $label ($fmt)
 # Edit this file, then run: theme sync
 
 # Base colors
@@ -397,7 +431,7 @@ url=${c4:-7aa2f7}
 EOF
 
   [[ -n "$tmpfile" ]] && rm -f "$tmpfile"
-  echo -e "${GREEN}  Palette imported${RESET}"
+  echo -e "  ${GREEN}Imported${RESET} ${DIM}($fmt)${RESET}"
   apply_palette
 }
 
@@ -1074,7 +1108,7 @@ cmd_help() {
   echo -e "    theme save ${DIM}<name>${RESET}             save current palette as custom theme"
   echo -e "    theme remove ${DIM}<name>${RESET}           remove custom theme"
   echo -e "    theme sync                   apply palette to all desktop configs"
-  echo -e "    theme import ${DIM}<file>${RESET}          import kitty theme file or URL"
+  echo -e "    theme import ${DIM}[file|url]${RESET}      import theme (kitty/Xresources, or clipboard)"
   echo -e "    theme update                 refresh Gogh themes cache"
   echo -e "    theme current                show current theme details"
   echo -e "    theme animations ${DIM}[on|off]${RESET}   toggle Hyprland animations"
