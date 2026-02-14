@@ -58,8 +58,11 @@ Unified theming across kitty, neovim, and zellij from a single palette file.
 theme                       # show current theme + available commands
 theme set "Gruvbox"         # set theme from 364 Gogh themes
 theme search cat            # search themes (fuzzy, with color preview)
+theme search cat --dark     # search only dark themes
+theme dark                  # browse all 310 dark themes
+theme light                 # browse all 54 light themes
+theme list dark             # list dark themes (compact)
 theme sync                  # apply palette to all configs
-theme current               # show current theme details
 theme import file.conf      # import kitty theme file
 ```
 

@@ -1,7 +1,7 @@
 # --- Zellij auto-start (MUST BE FIRST) ---
 if [[ -z "$ZELLIJ" && -t 1 ]]; then
     # Kill dead/exited sessions on startup
-    zellij list-sessions -n -s 2>/dev/null | grep "EXITED" | awk '{print $1}' | while read -r s; do
+    zellij list-sessions -n 2>/dev/null | grep "EXITED" | awk '{print $1}' | while read -r s; do
         zellij delete-session "$s" 2>/dev/null
     done
     exec zellij attach -c main

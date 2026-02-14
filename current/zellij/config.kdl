@@ -535,13 +535,13 @@ copy_command "wl-copy"
 // otherwise this will error if such a session exists.
 // Default: <RANDOM>
 // 
-// session_name "My singleton session"
- 
+session_name "main"
+
 // When `session_name` is provided, attaches to that session
 // if it is already running or creates it otherwise.
 // Default: false
-// 
-// attach_to_session true
+//
+attach_to_session true
  
 // Toggle between having Zellij lay out panes according to a predefined set of layouts whenever possible
 // Options:
@@ -678,17 +678,17 @@ show_startup_tips false
 // THEME-SYNC START
 themes {
   synced {
-    bg "#27272a"
-    fg "#e5e7eb"
-    black "#18181b"
-    red "#f7768e"
-    green "#9ece6a"
-    yellow "#e0af68"
-    blue "#7aa2f7"
-    magenta "#bb9af7"
-    cyan "#7dcfff"
-    white "#a1a1aa"
-    orange "#e0af68"
+    bg "#585b70"
+    fg "#cdd6f4"
+    black "#45475a"
+    red "#f38ba8"
+    green "#a6e3a1"
+    yellow "#f9e2af"
+    blue "#89b4fa"
+    magenta "#f5c2e7"
+    cyan "#94e2d5"
+    white "#bac2de"
+    orange "#f9e2af"
   }
 }
 // THEME-SYNC END
