@@ -50,10 +50,16 @@ cmd_update() {
 
 # --- List all themes ---
 cmd_list() {
-  local filter="${1:-}"
+  local filter="" good=""
+  for arg in "$@"; do
+    case "$arg" in
+      dark|light) filter="$arg" ;;
+      --good) good="true" ;;
+    esac
+  done
   ensure_cache
   python3 << PYEOF
-import json
+import json, colorsys
 
 def luminance(hex_color):
     hex_color = hex_color.lstrip('#')
@@ -64,8 +70,39 @@ def luminance(hex_color):
 def is_dark(t):
     return luminance(t.get('background', '#808080')) < 128
 
+def from_hex(h):
+    h = h.lstrip('#')
+    if len(h) != 6: return (128,128,128)
+    return int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
+
+def rel_lum(r, g, b):
+    def f(c):
+        c = c/255
+        return c/12.92 if c <= 0.03928 else ((c+0.055)/1.055)**2.4
+    return 0.2126*f(r) + 0.7152*f(g) + 0.0722*f(b)
+
+def contrast(c1, c2):
+    l1, l2 = rel_lum(*from_hex(c1)), rel_lum(*from_hex(c2))
+    hi, lo = max(l1,l2), min(l1,l2)
+    return (hi+0.05)/(lo+0.05)
+
+def quality_ok(t):
+    bg = t.get('background', '').lstrip('#')
+    fg = t.get('foreground', '').lstrip('#')
+    if len(bg) != 6 or len(fg) != 6: return False
+    if contrast(bg, fg) < 4.5: return False
+    hues = set()
+    for i in range(2, 8):
+        hc = t.get(f'color_{i:02d}', '').lstrip('#')
+        if len(hc) != 6: continue
+        r, g, b = from_hex(hc)
+        h, l, s = colorsys.rgb_to_hls(r/255, g/255, b/255)
+        if s > 0.10: hues.add(int(h*6) % 6)
+    return len(hues) >= 4
+
 import os
 filter_mode = "${filter}".lower()
+good = "${good}" == "true"
 themes = json.load(open("$GOGH_CACHE"))
 custom = []
 custom_path = "$CUSTOM_THEMES"
@@ -78,6 +115,7 @@ if custom:
         dark = is_dark(t)
         if filter_mode == "dark" and not dark: continue
         if filter_mode == "light" and dark: continue
+        if good and not quality_ok(t): continue
         bg = t.get('background', '')
         tag = "\033[2mdark\033[0m" if dark else "\033[33mlight\033[0m"
         print(f'    \033[35m*\033[0m {t["name"]}  [{tag}]  \033[2m{bg}\033[0m')
@@ -87,24 +125,27 @@ for i, t in enumerate(themes, 1):
     dark = is_dark(t)
     if filter_mode == "dark" and not dark: continue
     if filter_mode == "light" and dark: continue
+    if good and not quality_ok(t): continue
     bg = t.get('background', '')
     tag = "\033[2mdark\033[0m" if dark else "\033[33mlight\033[0m"
     print(f'  {i:3d}. {t["name"]}  [{tag}]  \033[2m{bg}\033[0m')
     shown += 1
 
-label = f" ({filter_mode})" if filter_mode in ("dark", "light") else ""
+q_label = ", quality" if good else ""
+label = f" ({filter_mode}{q_label})" if filter_mode in ("dark", "light") or good else ""
 print(f'\n  Total: {shown} themes{label}')
 PYEOF
 }
 
 # --- Search themes ---
 cmd_search() {
-  # Parse --dark/--light flags
-  local filter="" query=""
+  # Parse --dark/--light/--good flags
+  local filter="" query="" good=""
   for arg in "$@"; do
     case "$arg" in
       --dark)  filter="dark" ;;
       --light) filter="light" ;;
+      --good)  good="true" ;;
       *)       query="$arg" ;;
     esac
   done
@@ -114,7 +155,7 @@ cmd_search() {
   fi
   ensure_cache
   python3 << PYEOF
-import json, sys
+import json, sys, colorsys
 
 def luminance(hex_color):
     hex_color = hex_color.lstrip('#')
@@ -125,9 +166,40 @@ def luminance(hex_color):
 def is_dark(t):
     return luminance(t.get('background', '#808080')) < 128
 
+def from_hex(h):
+    h = h.lstrip('#')
+    if len(h) != 6: return (128,128,128)
+    return int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
+
+def rel_lum(r, g, b):
+    def f(c):
+        c = c/255
+        return c/12.92 if c <= 0.03928 else ((c+0.055)/1.055)**2.4
+    return 0.2126*f(r) + 0.7152*f(g) + 0.0722*f(b)
+
+def contrast(c1, c2):
+    l1, l2 = rel_lum(*from_hex(c1)), rel_lum(*from_hex(c2))
+    hi, lo = max(l1,l2), min(l1,l2)
+    return (hi+0.05)/(lo+0.05)
+
+def quality_ok(t):
+    bg = t.get('background', '').lstrip('#')
+    fg = t.get('foreground', '').lstrip('#')
+    if len(bg) != 6 or len(fg) != 6: return False
+    if contrast(bg, fg) < 4.5: return False
+    hues = set()
+    for i in range(2, 8):
+        hc = t.get(f'color_{i:02d}', '').lstrip('#')
+        if len(hc) != 6: continue
+        r, g, b = from_hex(hc)
+        h, l, s = colorsys.rgb_to_hls(r/255, g/255, b/255)
+        if s > 0.10: hues.add(int(h*6) % 6)
+    return len(hues) >= 4
+
 import os
 query = """${query}""".lower()
 filter_mode = "${filter}"
+good = "${good}" == "true"
 themes = json.load(open("$GOGH_CACHE"))
 
 # Load custom themes
@@ -144,6 +216,7 @@ for t, is_custom in all_themes:
     dark = is_dark(t)
     if filter_mode == "dark" and not dark: continue
     if filter_mode == "light" and dark: continue
+    if good and not quality_ok(t): continue
     # Apply name filter (if query given)
     if query and query not in t["name"].lower(): continue
     matches.append((t, is_custom))
@@ -589,6 +662,260 @@ with open(custom_path, 'w') as f:
 
 print(f"\033[32m  Theme '{name}' removed\033[0m ({len(themes)} custom themes)")
 PYEOF
+}
+
+# --- Generate random palette ---
+cmd_generate() {
+  local mode="dark" wild="" seed=""
+  for arg in "$@"; do
+    case "$arg" in
+      dark|light) mode="$arg" ;;
+      --wild) wild="true" ;;
+      --seed=*) seed="${arg#--seed=}" ;;
+    esac
+  done
+  echo -e "  ${DIM}Generating...${RESET}"
+  GEN_MODE="$mode" GEN_WILD="$wild" GEN_SEED="$seed" GEN_PALETTE="$PALETTE" python3 << 'PYEOF'
+import os, random, colorsys, sys
+
+def hsl2rgb(h, s, l):
+    r, g, b = colorsys.hls_to_rgb((h % 360)/360, l, s)
+    return int(round(r*255)), int(round(g*255)), int(round(b*255))
+
+def rgb2hsl(r, g, b):
+    h, l, s = colorsys.rgb_to_hls(r/255, g/255, b/255)
+    return h*360, s, l
+
+def to_hex(r, g, b): return f"{r:02x}{g:02x}{b:02x}"
+def from_hex(h):
+    h = h.lstrip('#')
+    return int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
+
+def clamp(v, lo=0.0, hi=1.0): return max(lo, min(hi, v))
+
+def blend(c1, c2, t):
+    r1,g1,b1 = from_hex(c1); r2,g2,b2 = from_hex(c2)
+    return to_hex(int(r1+(r2-r1)*t), int(g1+(g2-g1)*t), int(b1+(b2-b1)*t))
+
+def rel_lum(r, g, b):
+    def f(c):
+        c = c/255
+        return c/12.92 if c <= 0.03928 else ((c+0.055)/1.055)**2.4
+    return 0.2126*f(r) + 0.7152*f(g) + 0.0722*f(b)
+
+def contrast(c1, c2):
+    l1, l2 = rel_lum(*from_hex(c1)), rel_lum(*from_hex(c2))
+    hi, lo = max(l1,l2), min(l1,l2)
+    return (hi+0.05)/(lo+0.05)
+
+def tint(target_h, base_h, amount=15):
+    diff = ((base_h - target_h + 180) % 360) - 180
+    return (target_h + clamp(diff, -amount, amount)) % 360
+
+mode = os.environ.get("GEN_MODE", "dark")
+wild = os.environ.get("GEN_WILD") == "true"
+seed_hex = os.environ.get("GEN_SEED", "").lstrip('#')
+palette_path = os.environ["GEN_PALETTE"]
+
+# Base hue
+if seed_hex and len(seed_hex) == 6:
+    base_h, _, _ = rgb2hsl(*from_hex(seed_hex))
+else:
+    base_h = random.uniform(0, 360)
+
+# BG / FG
+is_light = mode == "light"
+bg_l = random.uniform(0.88, 0.95) if is_light else random.uniform(0.04, 0.10)
+fg_l = random.uniform(0.08, 0.18) if is_light else random.uniform(0.78, 0.92)
+bg_s = random.uniform(0.08, 0.28)
+fg_s = random.uniform(0.05, 0.15)
+bg = to_hex(*hsl2rgb(base_h, bg_s, bg_l))
+fg = to_hex(*hsl2rgb(base_h, fg_s, fg_l))
+
+# Ensure contrast >= 4.5:1
+for _ in range(30):
+    if contrast(bg, fg) >= 4.5: break
+    if is_light:
+        bg_l = min(bg_l + 0.02, 0.98); fg_l = max(fg_l - 0.02, 0.03)
+    else:
+        bg_l = max(bg_l - 0.01, 0.01); fg_l = min(fg_l + 0.02, 0.98)
+    bg = to_hex(*hsl2rgb(base_h, bg_s, bg_l))
+    fg = to_hex(*hsl2rgb(base_h, fg_s, fg_l))
+
+c = {}
+if wild:
+    # Normal 0-7: monochrome ramp of base hue
+    ramp = [0.05, 0.09, 0.16, 0.26, 0.38, 0.52, 0.70, 0.88]
+    if is_light: ramp = [1.0 - x for x in ramp]
+    for i in range(8):
+        h = base_h + random.uniform(-3, 3)
+        s = clamp(bg_s + random.uniform(0, 0.10), 0.03, 0.35)
+        l = clamp(ramp[i] + random.uniform(-0.02, 0.02), 0.02, 0.96)
+        c[i] = to_hex(*hsl2rgb(h, s, l))
+    # Bright 8-15: golden angle spread accents
+    start = random.uniform(0, 360)
+    l_center = 0.42 if is_light else 0.62
+    for i in range(8):
+        h = (start + i * 137.508) % 360
+        s = clamp(0.55 + random.uniform(-0.12, 0.12), 0.30, 0.80)
+        l = clamp(l_center + random.uniform(-0.08, 0.08), 0.30, 0.78)
+        c[8+i] = to_hex(*hsl2rgb(h, s, l))
+else:
+    # Traditional color zones tinted toward base hue
+    #         (hue,  s_lo, s_hi, l_lo, l_hi)
+    zones = [
+        (base_h, 0.05, 0.15, 0.10, 0.18),  # 0 black
+        (0,      0.55, 0.75, 0.45, 0.58),   # 1 red
+        (120,    0.40, 0.65, 0.38, 0.50),   # 2 green
+        (50,     0.55, 0.75, 0.50, 0.62),   # 3 yellow
+        (220,    0.45, 0.70, 0.45, 0.58),   # 4 blue
+        (290,    0.40, 0.65, 0.45, 0.58),   # 5 magenta
+        (180,    0.40, 0.65, 0.42, 0.55),   # 6 cyan
+        (base_h, 0.05, 0.15, 0.62, 0.75),   # 7 white
+    ]
+    for i, (zh, s_lo, s_hi, l_lo, l_hi) in enumerate(zones):
+        h = (base_h + random.uniform(-5,5)) if i in (0,7) else (tint(zh, base_h, 15) + random.uniform(-8,8))
+        s = random.uniform(s_lo, s_hi)
+        l = random.uniform(l_lo, l_hi)
+        if is_light and i not in (0, 7):
+            l = clamp(l - 0.12, 0.28, 0.48)
+        c[i] = to_hex(*hsl2rgb(h % 360, s, l))
+
+    # Bright variants: more saturated, shifted lightness
+    l_shift = -0.10 if is_light else 0.15
+    for i in range(8):
+        r, g, b = from_hex(c[i])
+        h, s, l = rgb2hsl(r, g, b)
+        if i == 0:
+            c[8] = to_hex(*hsl2rgb(h, clamp(s+0.05), clamp(l + (0.18 if not is_light else -0.10), 0.05, 0.95)))
+        elif i == 7:
+            c[15] = to_hex(*hsl2rgb(h, clamp(s+0.03), clamp(l + (0.15 if not is_light else -0.15), 0.05, 0.95)))
+        else:
+            c[8+i] = to_hex(*hsl2rgb(h, clamp(s+0.12), clamp(l + l_shift, 0.15, 0.85)))
+
+# Use seed color as cursor if provided
+cursor = seed_hex if (seed_hex and len(seed_hex) == 6) else c[4]
+
+# Derived
+bg_light = blend(bg, fg, 0.07)
+bg_highlight = blend(bg, fg, 0.19)
+fg_dim = blend(fg, bg, 0.33)
+fg_muted = blend(fg, bg, 0.55)
+border_c = blend(bg, fg, 0.28)
+
+# Write palette
+names = ['black','red','green','yellow','blue','magenta','cyan','white']
+label = "wild" if wild else "generated"
+lines = [
+    "# Terminal color palette — single source of truth",
+    f"# Theme: Random ({label}, hue={base_h:.0f})",
+    "# Edit this file, then run: theme sync",
+    "", "# Base colors",
+    f"bg={bg}", f"bg_light={bg_light}", f"bg_highlight={bg_highlight}",
+    f"fg={fg}", f"fg_dim={fg_dim}", f"fg_muted={fg_muted}", f"border={border_c}",
+    "", "# Terminal 16 colors",
+]
+for i in range(8):
+    lines.append(f"{names[i]}={c[i]}")
+    lines.append(f"bright_{names[i]}={c[8+i]}")
+lines += ["", "# Accent", f"cursor={cursor}", f"url={c[4]}"]
+
+with open(palette_path, 'w') as f:
+    f.write('\n'.join(lines) + '\n')
+
+# Preview
+print(f"  ", end="")
+for i in range(16):
+    r, g, b = from_hex(c[i])
+    print(f"\033[48;2;{r};{g};{b}m  \033[0m", end="")
+    if i == 7: print(" ", end="")
+print()
+cr = contrast(bg, fg)
+print(f"  \033[2mbg:#{bg} fg:#{fg} contrast:{cr:.1f}:1 hue:{base_h:.0f}\033[0m")
+PYEOF
+
+  if [[ $? -eq 0 ]]; then
+    apply_palette
+  fi
+}
+
+# --- Random quality theme ---
+cmd_random() {
+  local filter="${1:-}"
+  ensure_cache
+  local name
+  name=$(RAND_FILTER="$filter" RAND_GOGH="$GOGH_CACHE" RAND_CUSTOM="$CUSTOM_THEMES" python3 << 'PYEOF'
+import os, json, random, sys, colorsys
+
+def from_hex(h):
+    h = h.lstrip('#')
+    if len(h) != 6: return (128, 128, 128)
+    return int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
+
+def rgb2hsl(r, g, b):
+    h, l, s = colorsys.rgb_to_hls(r/255, g/255, b/255)
+    return h*360, s, l
+
+def rel_lum(r, g, b):
+    def f(c):
+        c = c/255
+        return c/12.92 if c <= 0.03928 else ((c+0.055)/1.055)**2.4
+    return 0.2126*f(r) + 0.7152*f(g) + 0.0722*f(b)
+
+def contrast(c1, c2):
+    l1, l2 = rel_lum(*from_hex(c1)), rel_lum(*from_hex(c2))
+    hi, lo = max(l1,l2), min(l1,l2)
+    return (hi+0.05)/(lo+0.05)
+
+def is_dark(t):
+    r, g, b = from_hex(t.get('background', '#808080').lstrip('#'))
+    return 0.299*r + 0.587*g + 0.114*b < 128
+
+def quality_ok(t):
+    bg = t.get('background', '').lstrip('#')
+    fg = t.get('foreground', '').lstrip('#')
+    if len(bg) != 6 or len(fg) != 6: return False
+    if contrast(bg, fg) < 4.5: return False
+    hues = set()
+    for i in range(2, 8):
+        hex_c = t.get(f'color_{i:02d}', '').lstrip('#')
+        if len(hex_c) != 6: continue
+        r, g, b = from_hex(hex_c)
+        h, s, l = rgb2hsl(r, g, b)
+        if s > 0.10: hues.add(int(h / 60) % 6)
+    return len(hues) >= 4
+
+filter_mode = os.environ.get("RAND_FILTER", "")
+gogh_path = os.environ["RAND_GOGH"]
+custom_path = os.environ.get("RAND_CUSTOM", "")
+
+themes = json.load(open(gogh_path))
+if custom_path and os.path.exists(custom_path):
+    themes = json.load(open(custom_path)) + themes
+
+candidates = []
+for t in themes:
+    dark = is_dark(t)
+    if filter_mode == "dark" and not dark: continue
+    if filter_mode == "light" and dark: continue
+    if not quality_ok(t): continue
+    candidates.append(t)
+
+if not candidates:
+    print("", file=sys.stderr)
+    sys.exit(1)
+
+pick = random.choice(candidates)
+print(pick["name"])
+print(f"\033[2m  ({len(candidates)} quality themes in pool)\033[0m", file=sys.stderr)
+PYEOF
+  )
+
+  if [[ -n "$name" ]]; then
+    cmd_set "$name"
+  else
+    echo -e "${RED}  No quality themes found${RESET}"
+  fi
 }
 
 # --- Backup configs before first sync ---
@@ -1115,20 +1442,22 @@ cmd_help() {
   echo ""
   echo -e "  ${BOLD}Commands:${RESET}"
   echo ""
-  echo -e "    theme set ${DIM}<name>${RESET}              set Gogh theme (364 themes)"
-  echo -e "    theme search ${DIM}<q>${RESET}             search themes (fuzzy + color preview)"
-  echo -e "    theme search ${DIM}<q>${RESET} --dark      search only dark themes"
-  echo -e "    theme search ${DIM}<q>${RESET} --light     search only light themes"
-  echo -e "    theme dark ${DIM}[query]${RESET}           browse/search dark themes"
-  echo -e "    theme light ${DIM}[query]${RESET}          browse/search light themes"
-  echo -e "    theme list ${DIM}[dark|light]${RESET}      list all themes (or filtered)"
+  echo -e "    theme set ${DIM}<name>${RESET}              set theme by name (Gogh + custom)"
+  echo -e "    theme search ${DIM}<q>${RESET} ${DIM}[--dark|--light|--good]${RESET}"
+  echo -e "                                 search themes (fuzzy + color preview)"
+  echo -e "    theme list ${DIM}[dark|light]${RESET} ${DIM}[--good]${RESET}"
+  echo -e "                                 list all themes (or filtered)"
+  echo -e "    theme dark/light ${DIM}[query]${RESET}     browse by type"
+  echo -e "    theme generate ${DIM}[dark|light]${RESET} ${DIM}[--wild] [--seed=HEX]${RESET}"
+  echo -e "                                 generate random harmonious palette"
+  echo -e "    theme random ${DIM}[dark|light]${RESET}    random quality theme from Gogh"
   echo -e "    theme save ${DIM}<name>${RESET}             save current palette as custom theme"
   echo -e "    theme remove ${DIM}<name>${RESET}           remove custom theme"
   echo -e "    theme sync                   apply palette to all desktop configs"
   echo -e "    theme import ${DIM}[file|url]${RESET}      import theme (kitty/Xresources, or clipboard)"
-  echo -e "    theme update                 refresh Gogh themes cache"
   echo -e "    theme current                show current theme details"
   echo -e "    theme animations ${DIM}[on|off]${RESET}   toggle Hyprland animations"
+  echo -e "    theme update                 refresh Gogh cache"
   echo -e "    theme backup                 backup all configs"
   echo ""
   echo -e "  ${DIM}Palette: ~/.config/theme/palette.conf${RESET}"
@@ -1144,11 +1473,13 @@ cmd_default() {
 
 # --- Main ---
 case "${1:-}" in
-  set)     cmd_set "$2" ;;
-  search)  shift; cmd_search "$@" ;;
-  list)    cmd_list "$2" ;;
+  set)        cmd_set "$2" ;;
+  search)     shift; cmd_search "$@" ;;
+  list)       shift; cmd_list "$@" ;;
   dark)       cmd_search --dark "$2" ;;
   light)      cmd_search --light "$2" ;;
+  generate)   shift; cmd_generate "$@" ;;
+  random)     cmd_random "$2" ;;
   save)       cmd_save "$2" ;;
   remove)     cmd_remove "$2" ;;
   sync)       apply_palette ;;
