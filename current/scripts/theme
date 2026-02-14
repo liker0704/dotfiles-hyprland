@@ -1254,6 +1254,23 @@ apply_palette() {
   FONT=$(grep '^font=' "$PALETTE" 2>/dev/null | cut -d= -f2-)
   [[ -z "$FONT" ]] && FONT="JetBrainsMono Nerd Font"
 
+  # Detect dark/light and compute adaptive vars
+  local is_light=false
+  local bg_r=$((16#${C[bg]:0:2})) bg_g=$((16#${C[bg]:2:2})) bg_b=$((16#${C[bg]:4:2}))
+  local lum=$(( (bg_r * 299 + bg_g * 587 + bg_b * 114) / 1000 ))
+  [[ $lum -gt 128 ]] && is_light=true
+
+  # accent: high-contrast color for active elements (workspace, clock, selected)
+  # shadow: box-shadow rgba string
+  local accent shadow
+  if $is_light; then
+    accent="${C[black]}"
+    shadow="rgba(0, 0, 0, 0.08)"
+  else
+    accent="${C[bright_white]}"
+    shadow="rgba(0, 0, 0, 0.3)"
+  fi
+
   ensure_backup
   echo "  Syncing..."
 
@@ -1443,7 +1460,7 @@ EOF
   padding: 0.25rem 0.6rem;
   margin: 3px 2px;
   border-radius: 4px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 4px ${shadow};
   transition: background-color 0.2s ease-in-out;
 }
 
@@ -1464,7 +1481,7 @@ EOF
 
 #workspaces button.active {
   color: #${C[bg]};
-  background-color: #${C[bright_white]};
+  background-color: #${accent};
 }
 
 #workspaces button:hover {
@@ -1474,7 +1491,7 @@ EOF
 
 /* --- Clock --- */
 #clock {
-  color: #${C[bright_white]};
+  color: #${accent};
   font-weight: 600;
 }
 
@@ -1508,9 +1525,9 @@ EOF
   margin: 3px 2px;
   margin-right: 6px;
   border-radius: 4px;
-  color: #${C[bright_white]};
+  color: #${accent};
   font-size: 14px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 4px ${shadow};
 }
 
 #custom-focus:hover {
@@ -1527,12 +1544,12 @@ EOF
   border: 1px solid #${C[border]};
   color: #${C[fg_dim]};
   font-weight: 600;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 4px ${shadow};
 }
 
 #language:hover {
   background-color: #${C[bg_light]};
-  color: #${C[bright_white]};
+  color: #${accent};
 }
 
 /* --- Power button separate --- */
@@ -1566,7 +1583,7 @@ EOF
 }
 
 #bluetooth.connected {
-  color: #${C[bright_white]};
+  color: #${accent};
 }
 
 #network {
@@ -1607,7 +1624,7 @@ EOF
 }
 
 @keyframes blink {
-  to { color: #${C[bg]}; }
+  to { color: #${C[fg_muted]}; }
 }
 
 /* --- Tooltip --- */
@@ -1617,7 +1634,7 @@ tooltip {
   padding: 8px 14px;
   border-radius: 8px;
   border: 1px solid #${C[border]};
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 12px ${shadow};
 }
 
 tooltip label {
@@ -1633,7 +1650,7 @@ EOF
       -e 's/^\(    background: *\)#[^;]*/\1#'"${C[bg]}"'/' \
       -e 's/^\(    background-alt: *\)#[^;]*/\1#'"${C[bg_light]}"'/' \
       -e 's/^\(    foreground: *\)#[^;]*/\1#'"${C[fg]}"'/' \
-      -e 's/^\(    selected: *\)#[^;]*/\1#'"${C[bright_white]}"'/' \
+      -e 's/^\(    selected: *\)#[^;]*/\1#'"${accent}"'/' \
       -e 's/^\(    active: *\)#[^;]*/\1#'"${C[fg_dim]}"'/' \
       -e 's/^\(    urgent: *\)#[^;]*/\1#'"${C[red]}"'/' \
       -e 's/^\(    border-dim: *\)#[^;]*/\1#'"${C[border]}"'/' \
@@ -1651,11 +1668,27 @@ EOF
       -e 's/\(@define-color noti-bg-alt \)#[^;]*/\1#'"${C[bg_light]}"'/' \
       -e 's/\(@define-color noti-bg-hover \)#[^;]*/\1#'"${C[bg_light]}"'/' \
       -e 's/\(@define-color text-color \)#[^;]*/\1#'"${C[fg]}"'/' \
-      -e 's/\(@define-color accent \)#[^;]*/\1#'"${C[bright_white]}"'/' \
+      -e 's/\(@define-color accent \)#[^;]*/\1#'"${accent}"'/' \
       -e 's/\(@define-color text-dim \)#[^;]*/\1#'"${C[fg_muted]}"'/' \
       -e 's/\(@define-color urgent \)#[^;]*/\1#'"${C[red]}"'/' \
       "$SWAYNC_STYLE"
     echo -e "    ${GREEN}swaync${RESET}"
+  fi
+
+  # --- Powerlevel10k ---
+  local P10K_CONF="$HOME/.p10k.zsh"
+  if [[ -f "$P10K_CONF" ]]; then
+    sed -i \
+      -e "s|\(POWERLEVEL9K_BACKGROUND=\).*|\1'#${C[bg_light]}'|" \
+      -e "s|\(POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_FOREGROUND=\).*|\1'#${C[border]}'|" \
+      -e "s|\(POWERLEVEL9K_DIR_FOREGROUND=\).*|\1'#${C[blue]}'|" \
+      -e "s|\(POWERLEVEL9K_DIR_SHORTENED_FOREGROUND=\).*|\1'#${C[fg_muted]}'|" \
+      -e "s|\(POWERLEVEL9K_DIR_ANCHOR_FOREGROUND=\).*|\1'#${C[cyan]}'|" \
+      -e "s|\(POWERLEVEL9K_VCS_CLEAN_FOREGROUND=\).*|\1'#${C[green]}'|" \
+      -e "s|\(POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND=\).*|\1'#${C[green]}'|" \
+      -e "s|\(POWERLEVEL9K_VCS_MODIFIED_FOREGROUND=\).*|\1'#${C[yellow]}'|" \
+      "$P10K_CONF"
+    echo -e "    ${GREEN}p10k${RESET}"
   fi
 
   # --- Reload all ---
