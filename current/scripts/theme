@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
-# theme — unified color management for kitty, neovim, zellij
+# theme — unified desktop color management
+# Syncs palette to: kitty, neovim, zellij, hyprland, hyprlock, waybar, rofi, swaync
+#
 # Usage:
-#   theme                       — show current theme + help
-#   theme sync                  — apply palette to all configs
-#   theme set <name>            — set Gogh theme by name
-#   theme search <query>        — search Gogh themes (fuzzy)
-#   theme list                  — list all Gogh themes
-#   theme save <name>            — save current palette as custom theme
-#   theme remove <name>          — remove custom theme
-#   theme import [file|url]     — import theme (kitty/Xresources/clipboard)
-#   theme update                — update Gogh themes cache
-#   theme current               — show current palette
+#   theme                          show current theme + help
+#   theme set <name>               set theme (Gogh + custom)
+#   theme search <q> [--dark|--light|--good]
+#   theme list [dark|light] [--good]
+#   theme generate [dark|light] [--wild] [--seed=HEX]
+#   theme random [dark|light]      random quality theme
+#   theme save <name>              save current as custom theme
+#   theme remove <name>            remove custom theme
+#   theme import [file|url]        import (kitty/Xresources/clipboard)
+#   theme sync                     apply palette to all configs
+#   theme animations [on|off]      toggle Hyprland animations
+#   theme current                  show current palette
 
 PALETTE="$HOME/.config/theme/palette.conf"
 GOGH_CACHE="$HOME/.config/theme/gogh-themes.json"
@@ -526,6 +530,10 @@ cmd_current() {
   local theme_name
   theme_name=$(grep -oP '# Theme: \K.*' "$PALETTE" 2>/dev/null || grep -oP '# Imported from: \K.*' "$PALETTE" 2>/dev/null || echo "custom")
   echo -e "  ${BOLD}$theme_name${RESET}"
+  # Unsaved indicator for generated/imported themes
+  if [[ "$theme_name" == Random* || "$theme_name" == *Imported* ]]; then
+    echo -e "  ${YELLOW}unsaved${RESET} ${DIM}— theme save <name> to keep${RESET}"
+  fi
   echo ""
   # Show colors from palette
   declare -A C
