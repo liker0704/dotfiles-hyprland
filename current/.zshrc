@@ -77,6 +77,14 @@ nix-install() {
 # alias ll='ls -l'
 # alias la='ls -A'
 
+# --- Theme wrapper (reload p10k after theme changes) ---
+theme() {
+  command theme "$@"
+  local rc=$?
+  [[ "$1" =~ ^(set|random|generate|font|sync)$ ]] && source ~/.p10k.zsh 2>/dev/null
+  return $rc
+}
+
 # --- Conda Initialize ---
 # !! Блок Conda всегда должен быть в конце !!
 __conda_setup="$('/home/liker/miniconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
