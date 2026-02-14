@@ -254,6 +254,15 @@ is_custom = match in custom
 def strip(c):
     return c.lstrip('#').lower() if c else ''
 
+def blend(c1, c2, ratio):
+    """Blend c1 toward c2 by ratio (0.0=c1, 1.0=c2)"""
+    r1, g1, b1 = int(c1[0:2], 16), int(c1[2:4], 16), int(c1[4:6], 16)
+    r2, g2, b2 = int(c2[0:2], 16), int(c2[2:4], 16), int(c2[4:6], 16)
+    r = int(r1 + (r2 - r1) * ratio)
+    g = int(g1 + (g2 - g1) * ratio)
+    b = int(b1 + (b2 - b1) * ratio)
+    return f"{r:02x}{g:02x}{b:02x}"
+
 bg = strip(match.get('background', ''))
 fg = strip(match.get('foreground', ''))
 cursor = strip(match.get('cursor', ''))
@@ -264,12 +273,12 @@ c = {}
 for i in range(1, 17):
     c[i] = strip(match.get(f'color_{i:02d}', ''))
 
-# Derive base colors
-bg_light = c[9] if c[9] else bg     # bright black
-bg_highlight = c[9] if c[9] else bg  # selection
-fg_dim = c[8] if c[8] else fg        # white (normal)
-fg_muted = c[9] if c[9] else c[8]    # bright black or white
-border = c[9] if c[9] else bg_light
+# Use extra fields from custom themes if available, otherwise derive via blending
+bg_light = strip(match.get('bg_light', '')) or blend(bg, fg, 0.07)
+bg_highlight = strip(match.get('bg_highlight', '')) or blend(bg, fg, 0.19)
+fg_dim = strip(match.get('fg_dim', '')) or blend(fg, bg, 0.33)
+fg_muted = strip(match.get('fg_muted', '')) or blend(fg, bg, 0.55)
+border = strip(match.get('border', '')) or blend(bg, fg, 0.28)
 
 source_label = "custom" if is_custom else "Gogh"
 palette = f"""# Terminal color palette — single source of truth
@@ -493,7 +502,7 @@ with open(palette_path) as f:
             k, v = line.split('=', 1)
             C[k.strip()] = v.strip()
 
-# Build Gogh-format theme
+# Build Gogh-format theme + extra palette fields
 theme = {
     "name": name,
     "background": "#" + C.get("bg", "000000"),
@@ -515,7 +524,15 @@ theme = {
     "color_14": "#" + C.get("bright_magenta", "ff00ff"),
     "color_15": "#" + C.get("bright_cyan", "00ffff"),
     "color_16": "#" + C.get("bright_white", "ffffff"),
+    # Extra fields (not in Gogh, used for precise palette restoration)
+    "bg_light": "#" + C.get("bg_light", ""),
+    "bg_highlight": "#" + C.get("bg_highlight", ""),
+    "fg_dim": "#" + C.get("fg_dim", ""),
+    "fg_muted": "#" + C.get("fg_muted", ""),
+    "border": "#" + C.get("border", ""),
 }
+# Remove empty extra fields
+theme = {k: v for k, v in theme.items() if v != "#"}
 
 # Load existing custom themes
 themes = []

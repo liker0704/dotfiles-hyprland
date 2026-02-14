@@ -19,6 +19,11 @@
     "color_13": "#7aa2f7",
     "color_14": "#bb9af7",
     "color_15": "#7dcfff",
-    "color_16": "#e5e7eb"
+    "color_16": "#e5e7eb",
+    "bg_light": "#27272a",
+    "bg_highlight": "#3f3f46",
+    "fg_dim": "#a1a1aa",
+    "fg_muted": "#71717a",
+    "border": "#52525b"
   }
 ]
