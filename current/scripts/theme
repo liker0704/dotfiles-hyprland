@@ -1394,14 +1394,14 @@ EOF
   local ROFI_THEME="$HOME/.config/rofi/themes/Monochrome-Dark.rasi"
   if [[ -f "$ROFI_THEME" ]]; then
     sed -i \
-      -e 's/^\(    background: *\)#[0-9a-fA-F]\{6\}/\1#'"${C[bg]}"'/' \
-      -e 's/^\(    background-alt: *\)#[0-9a-fA-F]\{6\}/\1#'"${C[bg_light]}"'/' \
-      -e 's/^\(    foreground: *\)#[0-9a-fA-F]\{6\}/\1#'"${C[fg]}"'/' \
-      -e 's/^\(    selected: *\)#[0-9a-fA-F]\{6\}/\1#'"${C[bright_white]}"'/' \
-      -e 's/^\(    active: *\)#[0-9a-fA-F]\{6\}/\1#'"${C[fg_dim]}"'/' \
-      -e 's/^\(    urgent: *\)#[0-9a-fA-F]\{6\}/\1#'"${C[red]}"'/' \
-      -e 's/^\(    border-dim: *\)#[0-9a-fA-F]\{6\}/\1#'"${C[border]}"'/' \
-      -e 's/^\(    text-dim: *\)#[0-9a-fA-F]\{6\}/\1#'"${C[fg_muted]}"'/' \
+      -e 's/^\(    background: *\)#[^;]*/\1#'"${C[bg]}"'/' \
+      -e 's/^\(    background-alt: *\)#[^;]*/\1#'"${C[bg_light]}"'/' \
+      -e 's/^\(    foreground: *\)#[^;]*/\1#'"${C[fg]}"'/' \
+      -e 's/^\(    selected: *\)#[^;]*/\1#'"${C[bright_white]}"'/' \
+      -e 's/^\(    active: *\)#[^;]*/\1#'"${C[fg_dim]}"'/' \
+      -e 's/^\(    urgent: *\)#[^;]*/\1#'"${C[red]}"'/' \
+      -e 's/^\(    border-dim: *\)#[^;]*/\1#'"${C[border]}"'/' \
+      -e 's/^\(    text-dim: *\)#[^;]*/\1#'"${C[fg_muted]}"'/' \
       "$ROFI_THEME"
     echo -e "    ${GREEN}rofi${RESET}"
   fi
@@ -1410,14 +1410,14 @@ EOF
   local SWAYNC_STYLE="$HOME/.config/swaync/style.css"
   if [[ -f "$SWAYNC_STYLE" ]]; then
     sed -i \
-      -e 's/@define-color noti-border-color #[0-9a-fA-F]\{6\}/@define-color noti-border-color #'"${C[border]}"'/' \
-      -e 's/@define-color noti-bg #[0-9a-fA-F]\{6\}/@define-color noti-bg #'"${C[bg]}"'/' \
-      -e 's/@define-color noti-bg-alt #[0-9a-fA-F]\{6\}/@define-color noti-bg-alt #'"${C[bg_light]}"'/' \
-      -e 's/@define-color noti-bg-hover #[0-9a-fA-F]\{6\}/@define-color noti-bg-hover #'"${C[bg_light]}"'/' \
-      -e 's/@define-color text-color #[0-9a-fA-F]\{6\}/@define-color text-color #'"${C[fg]}"'/' \
-      -e 's/@define-color accent #[0-9a-fA-F]\{6\}/@define-color accent #'"${C[bright_white]}"'/' \
-      -e 's/@define-color text-dim #[0-9a-fA-F]\{6\}/@define-color text-dim #'"${C[fg_muted]}"'/' \
-      -e 's/@define-color urgent #[0-9a-fA-F]\{6\}/@define-color urgent #'"${C[red]}"'/' \
+      -e 's/\(@define-color noti-border-color \)#[^;]*/\1#'"${C[border]}"'/' \
+      -e 's/\(@define-color noti-bg \)#[^;]*/\1#'"${C[bg]}"'/' \
+      -e 's/\(@define-color noti-bg-alt \)#[^;]*/\1#'"${C[bg_light]}"'/' \
+      -e 's/\(@define-color noti-bg-hover \)#[^;]*/\1#'"${C[bg_light]}"'/' \
+      -e 's/\(@define-color text-color \)#[^;]*/\1#'"${C[fg]}"'/' \
+      -e 's/\(@define-color accent \)#[^;]*/\1#'"${C[bright_white]}"'/' \
+      -e 's/\(@define-color text-dim \)#[^;]*/\1#'"${C[fg_muted]}"'/' \
+      -e 's/\(@define-color urgent \)#[^;]*/\1#'"${C[red]}"'/' \
       "$SWAYNC_STYLE"
     echo -e "    ${GREEN}swaync${RESET}"
   fi
