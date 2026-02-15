@@ -1264,7 +1264,14 @@ apply_palette() {
   # shadow: box-shadow rgba string
   local accent shadow
   if $is_light; then
-    accent="${C[black]}"
+    # Pick darkest of black/white (Solarized inverts these)
+    local bk_r=$((16#${C[black]:0:2})) bk_g=$((16#${C[black]:2:2})) bk_b=$((16#${C[black]:4:2}))
+    local bk_lum=$(( (bk_r * 299 + bk_g * 587 + bk_b * 114) / 1000 ))
+    if (( bk_lum > 128 )); then
+      accent="${C[white]}"
+    else
+      accent="${C[black]}"
+    fi
     shadow="rgba(0, 0, 0, 0.08)"
   else
     accent="${C[bright_white]}"
