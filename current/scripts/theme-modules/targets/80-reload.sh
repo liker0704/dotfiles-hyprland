@@ -34,33 +34,64 @@ if pgrep -x swaync &>/dev/null; then
   echo -e "    ${GREEN}swaync reloaded${RESET}"
 fi
 
-# Telegram Desktop
-if flatpak ps 2>/dev/null | grep -q org.telegram.desktop; then
-  local tg_ws
-  tg_ws=$(hyprctl clients -j 2>/dev/null | python3 -c "
+# --- Helper: save window position (workspace + monitor) by class ---
+_save_window_pos() {
+  local class_pattern="$1"
+  hyprctl clients -j 2>/dev/null | python3 -c "
 import json,sys
 for c in json.load(sys.stdin):
-  if 'telegram' in c.get('class','').lower():
-    print(c['workspace']['id']); break
+  if '$class_pattern' in c.get('class','').lower():
+    print(c['workspace']['id'], c['monitor']); break
+" 2>/dev/null
+}
+
+# --- Helper: restore window to saved workspace + monitor ---
+_restore_window_pos() {
+  local class_pattern="$1" saved_ws="$2" saved_mon="$3"
+  [[ -z "$saved_ws" ]] && return
+  for _ in {1..20}; do
+    sleep 0.3
+    local addr
+    addr=$(hyprctl clients -j 2>/dev/null | python3 -c "
+import json,sys
+for c in json.load(sys.stdin):
+  if '$class_pattern' in c.get('class','').lower():
+    print(c['address']); break
 " 2>/dev/null)
+    if [[ -n "$addr" ]]; then
+      hyprctl dispatch movetoworkspacesilent "$saved_ws,address:$addr" &>/dev/null
+      # Ensure correct monitor if workspace drifted
+      if [[ -n "$saved_mon" ]]; then
+        local cur_mon
+        cur_mon=$(hyprctl clients -j 2>/dev/null | python3 -c "
+import json,sys
+for c in json.load(sys.stdin):
+  if c.get('address','') == '$addr':
+    print(c['monitor']); break
+" 2>/dev/null)
+        if [[ "$cur_mon" != "$saved_mon" ]]; then
+          local mon_name
+          mon_name=$(hyprctl monitors -j 2>/dev/null | python3 -c "
+import json,sys
+for m in json.load(sys.stdin):
+  if m['id'] == $saved_mon: print(m['name']); break
+" 2>/dev/null)
+          [[ -n "$mon_name" ]] && hyprctl dispatch movewindow "mon:$mon_name,address:$addr" &>/dev/null
+        fi
+      fi
+      return 0
+    fi
+  done
+}
+
+# Telegram Desktop
+if flatpak ps 2>/dev/null | grep -q org.telegram.desktop; then
+  local tg_pos
+  tg_pos=$(_save_window_pos telegram)
+  local tg_ws="${tg_pos%% *}" tg_mon="${tg_pos##* }"
   flatpak kill org.telegram.desktop
   sleep 0.5
   flatpak run org.telegram.desktop &>/dev/null & disown
-  if [[ -n "$tg_ws" ]]; then
-    for _ in {1..20}; do
-      sleep 0.3
-      local tg_addr
-      tg_addr=$(hyprctl clients -j 2>/dev/null | python3 -c "
-import json,sys
-for c in json.load(sys.stdin):
-  if 'telegram' in c.get('class','').lower():
-    print(c['address']); break
-" 2>/dev/null)
-      if [[ -n "$tg_addr" ]]; then
-        hyprctl dispatch movetoworkspacesilent "$tg_ws,address:$tg_addr" &>/dev/null
-        break
-      fi
-    done
-  fi
+  _restore_window_pos telegram "$tg_ws" "$tg_mon"
   echo -e "    ${GREEN}telegram restarted${RESET}"
 fi
