@@ -23,6 +23,7 @@ PALETTE="$HOME/.config/theme/palette.conf"
 GOGH_CACHE="$HOME/.config/theme/gogh-themes.json"
 GOGH_URL="https://raw.githubusercontent.com/Gogh-Co/Gogh/master/data/themes.json"
 CUSTOM_THEMES="$HOME/.config/theme/custom-themes.json"
+FAVORITES="$HOME/.config/theme/favorites"
 BACKUP_DIR="$HOME/.config/theme/backup"
 ANIMATIONS_CONF="$HOME/.config/hypr/UserConfigs/UserAnimations.conf"
 DEFAULT_ANIM="$HOME/.config/hypr/animations/00-default.conf"
@@ -1730,6 +1731,99 @@ EOF
   echo -e "  ${BOLD}Done!${RESET} Restart neovim and zellij to apply."
 }
 
+# --- Favorites ---
+cmd_fav() {
+  local sub="${1:-}"
+  case "$sub" in
+    add)
+      local name="${2:-}"
+      if [[ -z "$name" ]]; then
+        # Add current theme
+        name=$(grep -oP '# Theme: \K.*' "$PALETTE" 2>/dev/null || echo "")
+        [[ -z "$name" ]] && { echo -e "${RED}No theme set${RESET}"; exit 1; }
+      fi
+      touch "$FAVORITES"
+      if grep -qxF "$name" "$FAVORITES" 2>/dev/null; then
+        echo -e "${YELLOW}Already in favorites:${RESET} $name"
+      else
+        echo "$name" >> "$FAVORITES"
+        echo -e "${GREEN}Added:${RESET} $name"
+      fi
+      ;;
+    rm|remove)
+      local name="${2:-}"
+      [[ -z "$name" ]] && { echo -e "${RED}Usage: theme fav rm <name>${RESET}"; exit 1; }
+      if [[ ! -f "$FAVORITES" ]] || ! grep -qxF "$name" "$FAVORITES" 2>/dev/null; then
+        echo -e "${RED}Not in favorites:${RESET} $name"
+        exit 1
+      fi
+      local tmp; tmp=$(grep -vxF "$name" "$FAVORITES")
+      echo "$tmp" > "$FAVORITES"
+      echo -e "${GREEN}Removed:${RESET} $name"
+      ;;
+    next|prev)
+      if [[ ! -f "$FAVORITES" ]] || [[ ! -s "$FAVORITES" ]]; then
+        echo -e "${RED}No favorites. Use: theme fav add${RESET}"; exit 1
+      fi
+      local current
+      current=$(grep -oP '# Theme: \K.*' "$PALETTE" 2>/dev/null || echo "")
+      local -a favs=()
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && favs+=("$line")
+      done < "$FAVORITES"
+      local count=${#favs[@]}
+      local idx=-1
+      for i in "${!favs[@]}"; do
+        [[ "${favs[$i]}" == "$current" ]] && idx=$i
+      done
+      if [[ "$sub" == "next" ]]; then
+        idx=$(( (idx + 1) % count ))
+      else
+        idx=$(( (idx - 1 + count) % count ))
+      fi
+      echo -e "  ${BOLD}→ ${favs[$idx]}${RESET}"
+      cmd_set "${favs[$idx]}"
+      ;;
+    [0-9]*)
+      if [[ ! -f "$FAVORITES" ]] || [[ ! -s "$FAVORITES" ]]; then
+        echo -e "${RED}No favorites${RESET}"; exit 1
+      fi
+      local n=$((sub))
+      local line
+      line=$(sed -n "${n}p" "$FAVORITES")
+      if [[ -z "$line" ]]; then
+        echo -e "${RED}No favorite #${n}${RESET}"; exit 1
+      fi
+      cmd_set "$line"
+      ;;
+    "")
+      # List favorites
+      if [[ ! -f "$FAVORITES" ]] || [[ ! -s "$FAVORITES" ]]; then
+        echo -e "  ${DIM}No favorites. Use: theme fav add [name]${RESET}"
+        return
+      fi
+      local current
+      current=$(grep -oP '# Theme: \K.*' "$PALETTE" 2>/dev/null || echo "")
+      echo ""
+      local i=1
+      while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        if [[ "$line" == "$current" ]]; then
+          echo -e "  ${GREEN}${i})${RESET} ${BOLD}${line}${RESET} ${GREEN}←${RESET}"
+        else
+          echo -e "  ${DIM}${i})${RESET} ${line}"
+        fi
+        ((i++))
+      done < "$FAVORITES"
+      echo ""
+      ;;
+    *)
+      echo -e "${RED}Usage: theme fav [add|rm|next|prev|N]${RESET}"
+      exit 1
+      ;;
+  esac
+}
+
 # --- Help ---
 cmd_help() {
   echo ""
@@ -1750,6 +1844,11 @@ cmd_help() {
   echo -e "    theme font                   show current font + installed Nerd Fonts"
   echo -e "    theme font set ${DIM}<name>${RESET}        set mono Nerd Font everywhere"
   echo -e "    theme font random            random Nerd Font"
+  echo -e "    theme fav                    list favorite themes"
+  echo -e "    theme fav add ${DIM}[name]${RESET}        add current/named theme to favorites"
+  echo -e "    theme fav rm ${DIM}<name>${RESET}         remove from favorites"
+  echo -e "    theme fav next/prev          cycle through favorites"
+  echo -e "    theme fav ${DIM}<N>${RESET}               apply Nth favorite"
   echo -e "    theme sync                   apply palette to all desktop configs"
   echo -e "    theme import ${DIM}[file|url]${RESET}      import theme (kitty/Xresources, or clipboard)"
   echo -e "    theme current                show current theme details"
@@ -1780,6 +1879,7 @@ case "${1:-}" in
   save)       cmd_save "$2" ;;
   remove)     cmd_remove "$2" ;;
   font)       shift; cmd_font "$@" ;;
+  fav)        shift; cmd_fav "$@" ;;
   sync)       apply_palette ;;
   import)     cmd_import "$2" ;;
   update)     cmd_update ;;
