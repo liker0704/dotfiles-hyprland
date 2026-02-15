@@ -32,21 +32,35 @@ if pgrep -x swaync &>/dev/null; then
   echo -e "    ${GREEN}swaync reloaded${RESET}"
 fi
 
-# --- Helper: save window position (workspace + monitor) by class ---
+# --- Helper: save window position (workspace + monitor name) by class ---
 _save_window_pos() {
   local class_pattern="$1"
   hyprctl clients -j 2>/dev/null | python3 -c "
 import json,sys
-for c in json.load(sys.stdin):
+clients = json.load(sys.stdin)
+monitors = {m['id']: m['name'] for m in json.load(open('/dev/stdin'))} if False else {}
+for c in clients:
   if '$class_pattern' in c.get('class','').lower():
     print(c['workspace']['id'], c['monitor']); break
 " 2>/dev/null
 }
 
-# --- Helper: restore window to saved workspace + monitor ---
+# --- Helper: get monitor name by ID ---
+_mon_name() {
+  hyprctl monitors -j 2>/dev/null | python3 -c "
+import json,sys
+for m in json.load(sys.stdin):
+  if m['id'] == $1: print(m['name']); break
+" 2>/dev/null
+}
+
+# --- Helper: restore window to saved workspace on saved monitor ---
 _restore_window_pos() {
-  local class_pattern="$1" saved_ws="$2" saved_mon="$3"
+  local class_pattern="$1" saved_ws="$2" saved_mon_id="$3"
   [[ -z "$saved_ws" ]] && return
+  # Resolve monitor name before app restarts
+  local saved_mon_name
+  saved_mon_name=$(_mon_name "$saved_mon_id")
   for _ in {1..20}; do
     sleep 0.3
     local addr
@@ -57,25 +71,11 @@ for c in json.load(sys.stdin):
     print(c['address']); break
 " 2>/dev/null)
     if [[ -n "$addr" ]]; then
+      # Move window to workspace
       hyprctl dispatch movetoworkspacesilent "$saved_ws,address:$addr" &>/dev/null
-      # Ensure correct monitor if workspace drifted
-      if [[ -n "$saved_mon" ]]; then
-        local cur_mon
-        cur_mon=$(hyprctl clients -j 2>/dev/null | python3 -c "
-import json,sys
-for c in json.load(sys.stdin):
-  if c.get('address','') == '$addr':
-    print(c['monitor']); break
-" 2>/dev/null)
-        if [[ "$cur_mon" != "$saved_mon" ]]; then
-          local mon_name
-          mon_name=$(hyprctl monitors -j 2>/dev/null | python3 -c "
-import json,sys
-for m in json.load(sys.stdin):
-  if m['id'] == $saved_mon: print(m['name']); break
-" 2>/dev/null)
-          [[ -n "$mon_name" ]] && hyprctl dispatch movewindow "mon:$mon_name,address:$addr" &>/dev/null
-        fi
+      # Move workspace to correct monitor (fixes focus-follows-mouse drift)
+      if [[ -n "$saved_mon_name" ]]; then
+        hyprctl dispatch moveworkspacetomonitor "$saved_ws" "$saved_mon_name" &>/dev/null
       fi
       return 0
     fi
