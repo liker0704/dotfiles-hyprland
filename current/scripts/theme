@@ -1156,6 +1156,17 @@ apply_font() {
   done
   echo -e "    ${GREEN}hyprlock${RESET}"
 
+  # 8. Zen Browser (monospace font in user.js)
+  local ZEN_USERJS="$HOME/.var/app/app.zen_browser.zen/.zen/21bfpd4i.Default (release)/user.js"
+  if [[ -f "$ZEN_USERJS" ]]; then
+    if grep -q 'font\.name\.monospace\.x-western' "$ZEN_USERJS"; then
+      sed -i 's/user_pref("font\.name\.monospace\.x-western".*/user_pref("font.name.monospace.x-western", "'"$FONT"'");/' "$ZEN_USERJS"
+    else
+      echo "user_pref(\"font.name.monospace.x-western\", \"$FONT\");" >> "$ZEN_USERJS"
+    fi
+    echo -e "    ${GREEN}zen${RESET} (new tabs)"
+  fi
+
   # Reload
   if pgrep -x kitty &>/dev/null; then
     kill -SIGUSR1 $(pgrep -x kitty) 2>/dev/null
@@ -1295,11 +1306,11 @@ apply_palette() {
   fi
 
   # --- System color-scheme (GTK/Qt/browsers via xdg-desktop-portal) ---
-  if command -v gsettings &>/dev/null; then
+  if command -v dconf &>/dev/null; then
     if $is_light; then
-      gsettings set org.gnome.desktop.interface color-scheme 'default'
+      dconf write /org/gnome/desktop/interface/color-scheme "'default'"
     else
-      gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+      dconf write /org/gnome/desktop/interface/color-scheme "'prefer-dark'"
     fi
   fi
 
