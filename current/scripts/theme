@@ -1797,25 +1797,60 @@ cmd_fav() {
       cmd_set "$line"
       ;;
     "")
-      # List favorites
+      # List favorites with color swatches
       if [[ ! -f "$FAVORITES" ]] || [[ ! -s "$FAVORITES" ]]; then
         echo -e "  ${DIM}No favorites. Use: theme fav add [name]${RESET}"
         return
       fi
+      ensure_cache
       local current
       current=$(grep -oP '# Theme: \K.*' "$PALETTE" 2>/dev/null || echo "")
-      echo ""
-      local i=1
-      while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        if [[ "$line" == "$current" ]]; then
-          echo -e "  ${GREEN}${i})${RESET} ${BOLD}${line}${RESET} ${GREEN}←${RESET}"
-        else
-          echo -e "  ${DIM}${i})${RESET} ${line}"
-        fi
-        ((i++))
-      done < "$FAVORITES"
-      echo ""
+      python3 << PYEOF
+import json, os
+
+current = """${current}"""
+favs = [l.strip() for l in open("$FAVORITES") if l.strip()]
+
+# Load all themes
+themes = {}
+gogh = json.load(open("$GOGH_CACHE"))
+for t in gogh:
+    themes[t["name"]] = t
+custom_path = "$CUSTOM_THEMES"
+if os.path.exists(custom_path):
+    for t in json.load(open(custom_path)):
+        themes[t["name"]] = t
+
+def swatch(t):
+    s = ""
+    # Try color_01-08 (Gogh), fallback to palette keys
+    keys = [f"color_{i:02d}" for i in range(1, 9)]
+    for k in keys:
+        c = t.get(k, "")
+        if not c:
+            continue
+        c = c.lstrip('#')
+        if len(c) != 6:
+            continue
+        r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+        s += f"\033[48;2;{r};{g};{b}m  \033[0m"
+    return s
+
+print()
+for i, name in enumerate(favs, 1):
+    t = themes.get(name)
+    if t:
+        sw = swatch(t)
+        bg = t.get("background", "")
+    else:
+        sw = ""
+        bg = ""
+    if name == current:
+        print(f"  \033[32m{i})\033[0m \033[1m{name}\033[0m  {sw}  \033[32m←\033[0m")
+    else:
+        print(f"  \033[2m{i})\033[0m {name}  {sw}  \033[2m{bg}\033[0m")
+print()
+PYEOF
       ;;
     *)
       echo -e "${RED}Usage: theme fav [add|rm|next|prev|N]${RESET}"
