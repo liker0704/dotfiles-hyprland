@@ -73,13 +73,9 @@ for c in json.load(sys.stdin):
     print(c['address']); break
 " 2>/dev/null)
     if [[ -n "$addr" ]]; then
-      # Move window to workspace
-      hyprctl dispatch movetoworkspacesilent "$saved_ws,address:$addr" &>/dev/null
-      # Move workspace to correct monitor
-      if [[ -n "$saved_mon_name" ]]; then
-        hyprctl dispatch moveworkspacetomonitor "$saved_ws" "$saved_mon_name" &>/dev/null
-      fi
-      # Restore tiling state: if was tiled but now floating, unfloat
+      # Wait for window to fully initialize
+      sleep 0.5
+      # Restore tiling state first (before moving workspace)
       local cur_floating
       cur_floating=$(hyprctl clients -j 2>/dev/null | python3 -c "
 import json,sys
@@ -91,6 +87,13 @@ for c in json.load(sys.stdin):
         hyprctl dispatch settiled "address:$addr" &>/dev/null
       elif [[ "$saved_floating" == "1" && "$cur_floating" == "0" ]]; then
         hyprctl dispatch setfloating "address:$addr" &>/dev/null
+      fi
+      # Move window to saved workspace
+      hyprctl dispatch movetoworkspacesilent "$saved_ws,address:$addr" &>/dev/null
+      sleep 0.2
+      # Ensure workspace is on correct monitor
+      if [[ -n "$saved_mon_name" ]]; then
+        hyprctl dispatch moveworkspacetomonitor "$saved_ws" "$saved_mon_name" &>/dev/null
       fi
       return 0
     fi
