@@ -14,7 +14,7 @@ for sock in /run/user/$(id -u)/nvim.*.0; do
   local _pid="${sock##*/nvim.}"; _pid="${_pid%.0}"
   kill -0 "$_pid" 2>/dev/null || continue
   nvim --server "$sock" --remote-send \
-    '<Cmd>source ~/.config/nvim/lua/plugins/colorscheme.lua<CR><Cmd>colorscheme tokyonight<CR>' \
+    '<Cmd>luafile ~/.config/nvim/theme-reload.lua<CR>' \
     2>/dev/null && _nvim_ok=true
 done
 $_nvim_ok && echo -e "    ${GREEN}neovim reloaded${RESET}"

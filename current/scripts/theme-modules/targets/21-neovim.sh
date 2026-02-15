@@ -62,4 +62,57 @@ return {
   },
 }
 EOF
+
+# Reload script (plain lua, not LazyVim spec — can be sourced at runtime)
+local _style="night"
+$is_light && _style="day"
+cat > "$HOME/.config/nvim/theme-reload.lua" << EOF
+require('tokyonight').setup({
+  style = "${_style}",
+  transparent = false,
+  terminal_colors = true,
+  styles = {
+    comments = { italic = false },
+    keywords = { italic = false },
+    sidebars = "dark",
+    floats = "dark",
+  },
+  on_colors = function(colors)
+    colors.bg = "#${C[bg]}"
+    colors.bg_dark = "#${C[bg]}"
+    colors.bg_float = "#${C[bg]}"
+    colors.bg_popup = "#${C[bg]}"
+    colors.bg_sidebar = "#${C[bg]}"
+    colors.bg_statusline = "#${C[bg_light]}"
+    colors.bg_highlight = "#${C[bg_light]}"
+    colors.fg = "#${C[fg]}"
+    colors.fg_dark = "#${C[fg_dim]}"
+    colors.fg_gutter = "#${C[bg_highlight]}"
+    colors.border = "#${C[bg_highlight]}"
+    colors.comment = "#${C[fg_muted]}"
+  end,
+  on_highlights = function(hl, c)
+    hl.Normal = { bg = "#${C[bg]}", fg = "#${C[fg]}" }
+    hl.NormalNC = { bg = "#${C[bg]}", fg = "#${C[fg]}" }
+    hl.NormalFloat = { bg = "#${C[bg]}" }
+    hl.NormalSB = { bg = "#${C[bg]}" }
+    hl.SignColumn = { bg = "#${C[bg]}" }
+    hl.LineNr = { fg = "#${C[border]}", bg = "#${C[bg]}" }
+    hl.CursorLineNr = { fg = "#${C[fg_dim]}", bg = "#${C[bg]}" }
+    hl.CursorLine = { bg = "#${C[bg_light]}" }
+    hl.Visual = { bg = "#${C[bg_highlight]}" }
+    hl.Pmenu = { bg = "#${C[bg]}", fg = "#${C[fg]}" }
+    hl.PmenuSel = { bg = "#${C[bg_highlight]}", fg = "#ffffff" }
+    hl.NeoTreeNormal = { bg = "#${C[bg]}" }
+    hl.NeoTreeNormalNC = { bg = "#${C[bg]}" }
+    hl.NeoTreeEndOfBuffer = { bg = "#${C[bg]}" }
+    hl.TelescopeNormal = { bg = "#${C[bg]}" }
+    hl.TelescopeBorder = { bg = "#${C[bg]}", fg = "#${C[bg_highlight]}" }
+    hl.StatusLine = { bg = "#${C[bg_light]}", fg = "#${C[fg]}" }
+    hl.StatusLineNC = { bg = "#${C[bg]}", fg = "#${C[fg_muted]}" }
+    hl.EndOfBuffer = { fg = "#${C[bg]}" }
+  end,
+})
+vim.cmd('colorscheme tokyonight-${_style}')
+EOF
 echo -e "    ${GREEN}neovim${RESET}"
