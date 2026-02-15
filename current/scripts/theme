@@ -1314,6 +1314,20 @@ apply_palette() {
     fi
   fi
 
+  # --- Claude Code theme (ANSI = follows terminal palette) ---
+  local CLAUDE_JSON="$HOME/.claude.json"
+  if [[ -f "$CLAUDE_JSON" ]]; then
+    local cc_theme; cc_theme=$($is_light && echo "light-ansi" || echo "dark-ansi")
+    if command -v python3 &>/dev/null; then
+      python3 -c "
+import json, sys
+with open('$CLAUDE_JSON') as f: d = json.load(f)
+d['theme'] = '$cc_theme'
+with open('$CLAUDE_JSON', 'w') as f: json.dump(d, f, indent=2)
+"
+    fi
+  fi
+
   ensure_backup
   echo "  Syncing..."
 
