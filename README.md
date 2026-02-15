@@ -4,33 +4,129 @@ Monochrome Hyprland setup with minimal UI and unified theming.
 
 ## Structure
 
-- `current/` - Current active configuration
-- `old/` - Previous configuration (backup)
+```
+current/
+├── hypr/              # Hyprland WM config
+├── kitty/             # Kitty terminal
+├── nvim/              # Neovim (LazyVim)
+├── rofi/              # Rofi launcher
+├── swaync/            # SwayNC notifications
+├── waybar/            # Waybar (minimal monochrome)
+├── alacritty/         # Alacritty terminal
+├── fontconfig/        # Font config
+├── zellij/            # Zellij multiplexer
+├── theme/             # Palette + custom themes
+├── scripts/
+│   ├── theme          # Theme CLI (dispatcher)
+│   ├── theme-modules/ # Modular theme system
+│   │   ├── lib/       #   Shared utilities
+│   │   ├── commands/  #   15 command modules
+│   │   └── targets/   #   12 sync targets (plugin architecture)
+│   └── mpvpaper-stop  # Live wallpaper manager
+├── .zshrc
+└── .p10k.zsh
+```
 
-## Current Setup
+## Stack
 
 - **WM**: Hyprland
 - **Bar**: Waybar (minimal monochrome)
-- **Terminal**: Kitty + Zellij
+- **Terminal**: Kitty + Zellij + Alacritty
 - **Shell**: Zsh + Oh-My-Zsh + Powerlevel10k
 - **Launcher**: Rofi
 - **Notifications**: SwayNC
 - **Editor**: Neovim (LazyVim)
+- **Browser**: Zen Browser (Flatpak)
+- **Messenger**: Telegram Desktop (Flatpak)
 - **Wallpapers**: swww (static) + mpvpaper (live video)
-- **Theming**: theme (unified palette for kitty/neovim/zellij)
+- **Theming**: `theme` — unified palette across all apps
 
-## Color Scheme
+## Install
 
-Managed via `theme` — single palette for all tools.
+```bash
+sudo ./install.sh
+```
 
-- Background: `#18181b` (zinc-900)
-- Foreground: `#e5e7eb` (zinc-200)
-- Accent colors: Tokyo Night palette
-- 364 Gogh themes available via `theme set <name>`
+Auto-backs up existing configs to `~/.dotfiles-backup/`, copies everything, creates `/usr/local/bin/theme` symlink, runs `theme sync`.
+
+```bash
+sudo ./install.sh --dry-run    # preview without changes
+sudo ./install.sh --no-backup  # skip backup (reinstall)
+sudo ./install.sh --force      # overwrite user data (palette, favorites)
+sudo ./install.sh --restore    # rollback from latest backup
+```
+
+Protected files (won't overwrite unless `--force`):
+- `~/.config/theme/palette.conf` — current theme
+- `~/.config/theme/favorites` — favorite themes
+- `~/.config/theme/custom-themes.json` — custom themes
+- `~/.config/theme/config` — skip targets config
+
+### Post-install
+
+```bash
+# Build mpvpaper from source (nix version breaks with NVIDIA)
+sudo apt install libmpv-dev libwayland-dev libegl-dev wayland-protocols ninja-build meson
+git clone https://github.com/GhostNaN/mpvpaper.git /tmp/mpvpaper
+cd /tmp/mpvpaper && meson setup build && ninja -C build
+cp build/mpvpaper build/mpvpaper-holder ~/.local/bin/
+
+# Create video wallpapers directory
+mkdir -p ~/Videos/wallpapers
+```
+
+## Theme
+
+Unified theming across 12 apps from a single palette file (`~/.config/theme/palette.conf`).
+
+### Sync targets
+kitty, neovim, zellij, alacritty, hyprland, waybar, rofi, swaync, powerlevel10k, telegram, claude code, dconf (GTK/Qt)
+
+Adding a new target = creating one file in `targets/`.
+
+### Commands
+
+```bash
+theme                           # current theme + help
+theme set "Tokyo Night"         # set from 364+ Gogh themes
+theme search gruvbox            # fuzzy search with color preview
+theme search cat --dark --good  # dark themes with quality filter
+theme list dark                 # list dark themes
+theme generate                  # random HSLuv palette
+theme generate light --wild     # wild light palette
+theme random                    # random quality theme + font
+theme sync                      # apply palette to all configs
+theme font set "Iosevka"        # set monospace Nerd Font everywhere
+theme font random               # random Nerd Font
+theme fav add                   # add current to favorites
+theme fav next / prev           # cycle favorites
+theme import file.conf          # import kitty/Xresources theme
+theme save "My Theme"           # save current as custom
+theme current                   # show current palette
+theme backup                    # backup all configs
+```
+
+### Skip targets
+
+Create `~/.config/theme/config`:
+```
+SKIP_TARGETS=telegram claude
+```
 
 ## Key Bindings
 
-### Zellij (Alt-based, always available in locked mode)
+### Hyprland
+| Action | Keys |
+|--------|------|
+| Navigate | `Super+H/J/K/L` |
+| Move window | `Super+Shift+H/J/K/L` |
+| Workspaces | `Super+1-9` |
+| Launcher | `Super+D` |
+| Wallpaper select | `Super+W` |
+| Live wallpaper | `Super+Alt+W` |
+| Random wallpaper | `Ctrl+Alt+W` |
+
+### Zellij
 | Action | Keys |
 |--------|------|
 | New pane | `Alt+N` |
@@ -40,85 +136,20 @@ Managed via `theme` — single palette for all tools.
 | Close pane | `Alt+X` |
 | Fullscreen | `Alt+F` |
 
-### Hyprland
-| Action | Keys |
-|--------|------|
-| Navigate | `Super+H/J/K/L` |
-| Move window | `Super+Shift+H/J/K/L` |
-| Workspaces | `Super+1-9` |
-| Wallpaper select | `Super+W` |
-| Live wallpaper | `Super+Alt+W` |
-| Random wallpaper | `Ctrl+Alt+W` |
-
-## Theme
-
-Unified theming across kitty, neovim, and zellij from a single palette file.
-
-```bash
-theme                       # show current theme + available commands
-theme set "Gruvbox"         # set theme from 364 Gogh themes
-theme search cat            # search themes (fuzzy, with color preview)
-theme search cat --dark     # search only dark themes
-theme dark                  # browse all 310 dark themes
-theme light                 # browse all 54 light themes
-theme list dark             # list dark themes (compact)
-theme sync                  # apply palette to all configs
-theme import file.conf      # import kitty theme file
-```
-
-Palette: `~/.config/theme/palette.conf`
-
 ## Live Wallpapers
 
 Video wallpapers via mpvpaper with rofi picker and auto-pause.
 
-- `Super+Alt+W` — rofi menu to select video wallpaper
-- Videos go in `~/Videos/wallpapers/` (mp4/webm/mkv)
+- `Super+Alt+W` — rofi menu to select video
+- Videos: `~/Videos/wallpapers/` (mp4/webm/mkv)
 - Wallpaper Engine (Steam) videos work via symlinks
-- `-p` flag auto-pauses when windows cover desktop
+- Auto-pauses when windows cover desktop
 
 ## Dependencies
 
 ```
-hyprland waybar rofi swaync zellij kitty neovim
+hyprland waybar rofi swaync zellij kitty neovim alacritty
 swww mpvpaper jq bc ffmpeg curl python3
 zsh oh-my-zsh powerlevel10k
 JetBrainsMono Nerd Font
-```
-
-## Install
-
-```bash
-# 1. Backup existing configs
-cp -r ~/.config/hypr ~/.config/hypr.bak
-
-# 2. Copy configs
-cp -r current/hypr ~/.config/
-cp -r current/kitty ~/.config/
-cp -r current/zellij ~/.config/
-cp -r current/nvim ~/.config/
-cp -r current/rofi ~/.config/
-cp -r current/swaync ~/.config/
-cp -r current/waybar ~/.config/
-cp -r current/fontconfig ~/.config/
-cp -r current/theme ~/.config/
-cp current/.zshrc ~/
-cp current/.p10k.zsh ~/
-
-# 3. Install scripts
-cp current/scripts/theme ~/.local/bin/
-cp current/scripts/mpvpaper-stop ~/.local/bin/
-chmod +x ~/.local/bin/theme ~/.local/bin/mpvpaper-stop
-
-# 4. Build mpvpaper from source (nix version breaks with NVIDIA)
-sudo apt install libmpv-dev libwayland-dev libegl-dev wayland-protocols ninja-build meson
-git clone https://github.com/GhostNaN/mpvpaper.git /tmp/mpvpaper
-cd /tmp/mpvpaper && meson setup build && ninja -C build
-cp build/mpvpaper build/mpvpaper-holder ~/.local/bin/
-
-# 5. Apply theme
-theme sync
-
-# 6. Create video wallpapers directory
-mkdir -p ~/Videos/wallpapers
 ```
