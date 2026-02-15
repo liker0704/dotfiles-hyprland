@@ -717,28 +717,32 @@ cmd_generate() {
       --no-font) no_font="true" ;;
     esac
   done
-  echo -e "  ${DIM}Generating...${RESET}"
-  GEN_MODE="$mode" GEN_WILD="$wild" GEN_SEED="$seed" GEN_PALETTE="$PALETTE" python3 << 'PYEOF'
-import os, random, colorsys, sys
+  echo -e "  ${DIM}Generating (HSLuv)...${RESET}"
+  local VENV_PY="$HOME/.local/share/theme-venv/bin/python3"
+  if [[ ! -x "$VENV_PY" ]]; then
+    echo -e "  ${DIM}Installing hsluv...${RESET}"
+    python3 -m venv "$HOME/.local/share/theme-venv"
+    "$VENV_PY" -m pip install -q hsluv
+  fi
+  GEN_MODE="$mode" GEN_WILD="$wild" GEN_SEED="$seed" GEN_PALETTE="$PALETTE" "$VENV_PY" << 'PYEOF'
+import os, random, hsluv
 
-def hsl2rgb(h, s, l):
-    r, g, b = colorsys.hls_to_rgb((h % 360)/360, l, s)
-    return int(round(r*255)), int(round(g*255)), int(round(b*255))
+def to_hex_hsluv(h, s, l):
+    """HSLuv → hex (no #). h=0-360, s=0-100, l=0-100"""
+    return hsluv.hsluv_to_hex([h % 360, max(0,min(100,s)), max(0,min(100,l))])[1:]
 
-def rgb2hsl(r, g, b):
-    h, l, s = colorsys.rgb_to_hls(r/255, g/255, b/255)
-    return h*360, s, l
-
-def to_hex(r, g, b): return f"{r:02x}{g:02x}{b:02x}"
 def from_hex(h):
     h = h.lstrip('#')
     return int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
 
-def clamp(v, lo=0.0, hi=1.0): return max(lo, min(hi, v))
+def hex_to_hsluv(h):
+    return hsluv.hex_to_hsluv('#' + h.lstrip('#'))
+
+def to_hex_rgb(r, g, b): return f"{r:02x}{g:02x}{b:02x}"
 
 def blend(c1, c2, t):
     r1,g1,b1 = from_hex(c1); r2,g2,b2 = from_hex(c2)
-    return to_hex(int(r1+(r2-r1)*t), int(g1+(g2-g1)*t), int(b1+(b2-b1)*t))
+    return to_hex_rgb(int(r1+(r2-r1)*t), int(g1+(g2-g1)*t), int(b1+(b2-b1)*t))
 
 def rel_lum(r, g, b):
     def f(c):
@@ -753,7 +757,7 @@ def contrast(c1, c2):
 
 def tint(target_h, base_h, amount=15):
     diff = ((base_h - target_h + 180) % 360) - 180
-    return (target_h + clamp(diff, -amount, amount)) % 360
+    return (target_h + max(-amount, min(amount, diff))) % 360
 
 mode = os.environ.get("GEN_MODE", "dark")
 wild = os.environ.get("GEN_WILD") == "true"
@@ -762,84 +766,95 @@ palette_path = os.environ["GEN_PALETTE"]
 
 # Base hue
 if seed_hex and len(seed_hex) == 6:
-    base_h, _, _ = rgb2hsl(*from_hex(seed_hex))
+    base_h, _, _ = hex_to_hsluv(seed_hex)
 else:
     base_h = random.uniform(0, 360)
 
-# BG / FG
+# BG / FG  (HSLuv L: 0-100)
 is_light = mode == "light"
-bg_l = random.uniform(0.88, 0.95) if is_light else random.uniform(0.04, 0.10)
-fg_l = random.uniform(0.08, 0.18) if is_light else random.uniform(0.78, 0.92)
-bg_s = random.uniform(0.08, 0.28)
-fg_s = random.uniform(0.05, 0.15)
-bg = to_hex(*hsl2rgb(base_h, bg_s, bg_l))
-fg = to_hex(*hsl2rgb(base_h, fg_s, fg_l))
+bg_l = random.uniform(92, 97) if is_light else random.uniform(5, 12)
+fg_l = random.uniform(15, 25) if is_light else random.uniform(80, 92)
+bg_s = random.uniform(8, 30)
+fg_s = random.uniform(5, 18)
+bg = to_hex_hsluv(base_h, bg_s, bg_l)
+fg = to_hex_hsluv(base_h, fg_s, fg_l)
 
 # Ensure contrast >= 4.5:1
-for _ in range(30):
+for _ in range(40):
     if contrast(bg, fg) >= 4.5: break
     if is_light:
-        bg_l = min(bg_l + 0.02, 0.98); fg_l = max(fg_l - 0.02, 0.03)
+        bg_l = min(bg_l + 1.5, 99); fg_l = max(fg_l - 1.5, 3)
     else:
-        bg_l = max(bg_l - 0.01, 0.01); fg_l = min(fg_l + 0.02, 0.98)
-    bg = to_hex(*hsl2rgb(base_h, bg_s, bg_l))
-    fg = to_hex(*hsl2rgb(base_h, fg_s, fg_l))
+        bg_l = max(bg_l - 1, 1); fg_l = min(fg_l + 1.5, 98)
+    bg = to_hex_hsluv(base_h, bg_s, bg_l)
+    fg = to_hex_hsluv(base_h, fg_s, fg_l)
 
 c = {}
 if wild:
     # Normal 0-7: monochrome ramp of base hue
-    ramp = [0.05, 0.09, 0.16, 0.26, 0.38, 0.52, 0.70, 0.88]
-    if is_light: ramp = [1.0 - x for x in ramp]
+    ramp = [5, 10, 18, 28, 40, 55, 72, 90]
+    if is_light: ramp = [100 - x for x in ramp]
     for i in range(8):
         h = base_h + random.uniform(-3, 3)
-        s = clamp(bg_s + random.uniform(0, 0.10), 0.03, 0.35)
-        l = clamp(ramp[i] + random.uniform(-0.02, 0.02), 0.02, 0.96)
-        c[i] = to_hex(*hsl2rgb(h, s, l))
+        s = random.uniform(8, 30)
+        l = ramp[i] + random.uniform(-2, 2)
+        c[i] = to_hex_hsluv(h, s, max(2, min(98, l)))
     # Bright 8-15: golden angle spread accents
     start = random.uniform(0, 360)
-    l_center = 0.42 if is_light else 0.62
+    l_center = 45 if is_light else 65
     for i in range(8):
         h = (start + i * 137.508) % 360
-        s = clamp(0.55 + random.uniform(-0.12, 0.12), 0.30, 0.80)
-        l = clamp(l_center + random.uniform(-0.08, 0.08), 0.30, 0.78)
-        c[8+i] = to_hex(*hsl2rgb(h, s, l))
+        s = random.uniform(55, 90)
+        l = l_center + random.uniform(-6, 6)
+        c[8+i] = to_hex_hsluv(h, s, max(25, min(80, l)))
 else:
-    # Traditional color zones tinted toward base hue
-    #         (hue,  s_lo, s_hi, l_lo, l_hi)
-    zones = [
-        (base_h, 0.05, 0.15, 0.10, 0.18),  # 0 black
-        (0,      0.55, 0.75, 0.45, 0.58),   # 1 red
-        (120,    0.40, 0.65, 0.38, 0.50),   # 2 green
-        (50,     0.55, 0.75, 0.50, 0.62),   # 3 yellow
-        (220,    0.45, 0.70, 0.45, 0.58),   # 4 blue
-        (290,    0.40, 0.65, 0.45, 0.58),   # 5 magenta
-        (180,    0.40, 0.65, 0.42, 0.55),   # 6 cyan
-        (base_h, 0.05, 0.15, 0.62, 0.75),   # 7 white
-    ]
-    for i, (zh, s_lo, s_hi, l_lo, l_hi) in enumerate(zones):
-        h = (base_h + random.uniform(-5,5)) if i in (0,7) else (tint(zh, base_h, 15) + random.uniform(-8,8))
-        s = random.uniform(s_lo, s_hi)
-        l = random.uniform(l_lo, l_hi)
-        if is_light and i not in (0, 7):
-            l = clamp(l - 0.12, 0.28, 0.48)
-        c[i] = to_hex(*hsl2rgb(h % 360, s, l))
+    # Traditional ANSI zones — all at same perceptual lightness
+    # HSLuv hues for ANSI colors (perceptually spaced)
+    normal_l = random.uniform(55, 68) if not is_light else random.uniform(38, 50)
+    bright_l = normal_l + (10 if not is_light else -10)
+    normal_s = random.uniform(70, 95)
+    bright_s = min(100, normal_s + random.uniform(3, 10))
 
-    # Bright variants: more saturated, shifted lightness
-    l_shift = -0.10 if is_light else 0.15
-    for i in range(8):
-        r, g, b = from_hex(c[i])
-        h, s, l = rgb2hsl(r, g, b)
+    #           hue   (ANSI standard zones)
+    zones = [
+        base_h,   # 0 black  (handled separately)
+        12,       # 1 red
+        127,      # 2 green
+        75,       # 3 yellow
+        265,      # 4 blue
+        308,      # 5 magenta
+        205,      # 6 cyan
+        base_h,   # 7 white  (handled separately)
+    ]
+
+    for i, zh in enumerate(zones):
         if i == 0:
-            c[8] = to_hex(*hsl2rgb(h, clamp(s+0.05), clamp(l + (0.18 if not is_light else -0.10), 0.05, 0.95)))
+            # black: very dark/light, low saturation
+            bl = random.uniform(12, 20) if not is_light else random.uniform(82, 90)
+            c[i] = to_hex_hsluv(base_h + random.uniform(-5,5), random.uniform(5, 20), bl)
         elif i == 7:
-            c[15] = to_hex(*hsl2rgb(h, clamp(s+0.03), clamp(l + (0.15 if not is_light else -0.15), 0.05, 0.95)))
+            # white: opposite of black
+            wl = random.uniform(68, 78) if not is_light else random.uniform(25, 35)
+            c[i] = to_hex_hsluv(base_h + random.uniform(-5,5), random.uniform(5, 18), wl)
         else:
-            c[8+i] = to_hex(*hsl2rgb(h, clamp(s+0.12), clamp(l + l_shift, 0.15, 0.85)))
+            # Color: tinted toward base hue, perceptually uniform lightness
+            h = tint(zh, base_h, 15) + random.uniform(-8, 8)
+            c[i] = to_hex_hsluv(h, normal_s, normal_l + random.uniform(-3, 3))
+
+    # Bright variants: same hue, brighter, more saturated
+    for i in range(8):
+        h_orig, s_orig, l_orig = hex_to_hsluv(c[i])
+        if i == 0:
+            c[8] = to_hex_hsluv(h_orig, min(100, s_orig + 5), l_orig + (15 if not is_light else -12))
+        elif i == 7:
+            c[15] = to_hex_hsluv(h_orig, min(100, s_orig + 3), l_orig + (12 if not is_light else -12))
+        else:
+            c[8+i] = to_hex_hsluv(h_orig, bright_s, bright_l + random.uniform(-3, 3))
 
 # Use seed color as cursor if provided
 cursor = seed_hex if (seed_hex and len(seed_hex) == 6) else c[4]
 
-# Derived
+# Derived colors (blend in RGB space)
 bg_light = blend(bg, fg, 0.07)
 bg_highlight = blend(bg, fg, 0.19)
 fg_dim = blend(fg, bg, 0.33)
