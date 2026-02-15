@@ -37,16 +37,14 @@ if pgrep -x swaync &>/dev/null; then
   echo -e "    ${GREEN}swaync reloaded${RESET}"
 fi
 
-# --- Helper: save window position (workspace + monitor name) by class ---
+# --- Helper: save window state (workspace, monitor, floating) by class ---
 _save_window_pos() {
   local class_pattern="$1"
   hyprctl clients -j 2>/dev/null | python3 -c "
 import json,sys
-clients = json.load(sys.stdin)
-monitors = {m['id']: m['name'] for m in json.load(open('/dev/stdin'))} if False else {}
-for c in clients:
+for c in json.load(sys.stdin):
   if '$class_pattern' in c.get('class','').lower():
-    print(c['workspace']['id'], c['monitor']); break
+    print(c['workspace']['id'], c['monitor'], int(c.get('floating', False))); break
 " 2>/dev/null
 }
 
@@ -59,11 +57,10 @@ for m in json.load(sys.stdin):
 " 2>/dev/null
 }
 
-# --- Helper: restore window to saved workspace on saved monitor ---
+# --- Helper: restore window to saved workspace, monitor, tiling state ---
 _restore_window_pos() {
-  local class_pattern="$1" saved_ws="$2" saved_mon_id="$3"
+  local class_pattern="$1" saved_ws="$2" saved_mon_id="$3" saved_floating="${4:-0}"
   [[ -z "$saved_ws" ]] && return
-  # Resolve monitor name before app restarts
   local saved_mon_name
   saved_mon_name=$(_mon_name "$saved_mon_id")
   for _ in {1..20}; do
@@ -78,9 +75,22 @@ for c in json.load(sys.stdin):
     if [[ -n "$addr" ]]; then
       # Move window to workspace
       hyprctl dispatch movetoworkspacesilent "$saved_ws,address:$addr" &>/dev/null
-      # Move workspace to correct monitor (fixes focus-follows-mouse drift)
+      # Move workspace to correct monitor
       if [[ -n "$saved_mon_name" ]]; then
         hyprctl dispatch moveworkspacetomonitor "$saved_ws" "$saved_mon_name" &>/dev/null
+      fi
+      # Restore tiling state: if was tiled but now floating, unfloat
+      local cur_floating
+      cur_floating=$(hyprctl clients -j 2>/dev/null | python3 -c "
+import json,sys
+for c in json.load(sys.stdin):
+  if c.get('address','') == '$addr':
+    print(int(c.get('floating', False))); break
+" 2>/dev/null)
+      if [[ "$saved_floating" == "0" && "$cur_floating" == "1" ]]; then
+        hyprctl dispatch settiled "address:$addr" &>/dev/null
+      elif [[ "$saved_floating" == "1" && "$cur_floating" == "0" ]]; then
+        hyprctl dispatch setfloating "address:$addr" &>/dev/null
       fi
       return 0
     fi
@@ -89,12 +99,13 @@ for c in json.load(sys.stdin):
 
 # Telegram Desktop
 if flatpak ps 2>/dev/null | grep -q org.telegram.desktop; then
-  local tg_pos
-  tg_pos=$(_save_window_pos telegram)
-  local tg_ws="${tg_pos%% *}" tg_mon="${tg_pos##* }"
+  local tg_state
+  tg_state=$(_save_window_pos telegram)
+  local tg_ws tg_mon tg_float
+  read -r tg_ws tg_mon tg_float <<< "$tg_state"
   flatpak kill org.telegram.desktop
   sleep 0.5
   flatpak run org.telegram.desktop &>/dev/null & disown
-  _restore_window_pos telegram "$tg_ws" "$tg_mon"
+  _restore_window_pos telegram "$tg_ws" "$tg_mon" "$tg_float"
   echo -e "    ${GREEN}telegram restarted${RESET}"
 fi
