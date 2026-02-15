@@ -6,13 +6,18 @@ if pgrep -x kitty &>/dev/null; then
   echo -e "    ${GREEN}kitty reloaded${RESET}"
 fi
 
-# Neovim
+# Neovim — reload all running instances
+local _nvim_ok=false
 for sock in /run/user/$(id -u)/nvim.*.0; do
   [[ -S "$sock" ]] || continue
+  # Skip stale sockets (process dead)
+  local _pid="${sock##*/nvim.}"; _pid="${_pid%.0}"
+  kill -0 "$_pid" 2>/dev/null || continue
   nvim --server "$sock" --remote-send \
     '<Cmd>source ~/.config/nvim/lua/plugins/colorscheme.lua<CR><Cmd>colorscheme tokyonight<CR>' \
-    2>/dev/null && echo -e "    ${GREEN}neovim reloaded${RESET}" && break
+    2>/dev/null && _nvim_ok=true
 done
+$_nvim_ok && echo -e "    ${GREEN}neovim reloaded${RESET}"
 
 # Hyprland
 if pgrep -x Hyprland &>/dev/null; then
