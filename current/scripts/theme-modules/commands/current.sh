@@ -21,13 +21,8 @@ cmd_current() {
     echo -e "  ${YELLOW}unsaved${RESET} ${DIM}— theme save <name> to keep${RESET}"
   fi
   echo ""
-  # Show colors from palette
-  declare -A C
-  while IFS='=' read -r key val; do
-    [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
-    key=$(echo "$key" | xargs); val=$(echo "$val" | xargs)
-    [[ -n "$key" && -n "$val" ]] && C[$key]="$val"
-  done < "$PALETTE"
+  # Use shared read_palette
+  read_palette
   # Swatch
   for name in black red green yellow blue magenta cyan white; do
     hex="${C[$name]}"

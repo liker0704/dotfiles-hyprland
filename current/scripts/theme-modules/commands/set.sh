@@ -132,10 +132,12 @@ if os.path.exists("$PALETTE"):
 theme_font = match.get("font", "")
 font_line = f"font={theme_font}" if theme_font else existing_font
 
-with open("$PALETTE", 'w') as f:
+tmp_path = "$PALETTE" + ".tmp"
+with open(tmp_path, 'w') as f:
     f.write(palette)
     if font_line:
         f.write(f"\n# Font\n{font_line}\n")
+os.replace(tmp_path, "$PALETTE")
 
 source_tag = "\033[35m(custom)\033[0m" if is_custom else "\033[2m(Gogh)\033[0m"
 print(f"\033[32m  Theme set: {match['name']}\033[0m {source_tag}")

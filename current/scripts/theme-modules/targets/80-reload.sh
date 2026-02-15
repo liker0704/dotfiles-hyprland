@@ -22,10 +22,8 @@ fi
 
 # Waybar
 if pgrep -x waybar &>/dev/null; then
-  pkill waybar
-  sleep 0.3
-  waybar &>/dev/null & disown
-  echo -e "    ${GREEN}waybar restarted${RESET}"
+  pkill -SIGUSR2 waybar
+  echo -e "    ${GREEN}waybar reloaded${RESET}"
 fi
 
 # SwayNC

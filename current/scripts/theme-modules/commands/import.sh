@@ -58,11 +58,21 @@ cmd_import() {
     c12=$(get "color12"); c13=$(get "color13"); c14=$(get "color14"); c15=$(get "color15")
   fi
 
-  [[ -z "$bg" || -z "$fg" ]] && { echo -e "${RED}Can't parse colors. Supported: kitty .conf, Xresources${RESET}"; rm -f "$tmpfile"; exit 1; }
+  # Validate hex colors
+  _valid_hex() { [[ "$1" =~ ^[0-9a-fA-F]{6}$ ]]; }
+  if ! _valid_hex "$bg" || ! _valid_hex "$fg"; then
+    echo -e "${RED}Can't parse colors. Supported: kitty .conf, Xresources${RESET}"
+    rm -f "$tmpfile"
+    exit 1
+  fi
+  # Validate ANSI colors, fallback to defaults if invalid
+  for _v in c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15; do
+    _valid_hex "${!_v}" || eval "$_v=''"
+  done
 
   local fmt="kitty"; $is_xres && fmt="Xresources"
 
-  cat > "$PALETTE" << EOF
+  cat > "$PALETTE.tmp" << EOF
 # Terminal color palette — single source of truth
 # Imported from: $label ($fmt)
 # Edit this file, then run: theme sync
@@ -99,6 +109,7 @@ cursor=${cursor:-${c4:-7aa2f7}}
 url=${c4:-7aa2f7}
 EOF
 
+  mv "$PALETTE.tmp" "$PALETTE"
   [[ -n "$tmpfile" ]] && rm -f "$tmpfile"
   echo -e "  ${GREEN}Imported${RESET} ${DIM}($fmt)${RESET}"
   source "$THEME_DIR/commands/sync.sh"

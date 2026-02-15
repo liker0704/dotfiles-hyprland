@@ -152,8 +152,10 @@ for i in range(8):
     lines.append(f"bright_{names[i]}={c[8+i]}")
 lines += ["", "# Accent", f"cursor={cursor}", f"url={c[4]}"]
 
-with open(palette_path, 'w') as f:
+tmp_path = palette_path + ".tmp"
+with open(tmp_path, 'w') as f:
     f.write('\n'.join(lines) + '\n')
+os.replace(tmp_path, palette_path)
 
 # Preview
 print(f"  ", end="")

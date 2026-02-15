@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
 # Font management commands
 
-# Get installed monospace Nerd Fonts
+# Get installed monospace Nerd Fonts (cached)
 get_nerd_fonts() {
-  # Get non-Mono variants first, then Mono-only fonts (like Iosevka)
-  local non_mono mono_only
-  non_mono=$(fc-list :spacing=100 family | sed 's/,.*//' | grep "Nerd Font" | grep -v "Nerd Font Mono" | grep -v "MonoNL\|NerdFont" | sort -u)
-  mono_only=$(fc-list :spacing=100 family | sed 's/,.*//' | grep "Nerd Font Mono" | grep -v "MonoNL\|NerdFont" | sort -u | while read -r f; do
-    base="${f% Mono}"
-    echo "$non_mono" | grep -qF "$base" || echo "$f"
-  done)
-  { echo "$non_mono"; echo "$mono_only"; } | grep -v '^$' | sort -u
+  local cache="/tmp/theme-fonts-cache-$(id -u)"
+  local fc_cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/fontconfig"
+  # Refresh if cache missing or fontconfig cache is newer
+  if [[ ! -f "$cache" ]] || [[ -d "$fc_cache_dir" && "$fc_cache_dir" -nt "$cache" ]]; then
+    local non_mono mono_only
+    non_mono=$(fc-list :spacing=100 family | sed 's/,.*//' | grep "Nerd Font" | grep -v "Nerd Font Mono" | grep -v "MonoNL\|NerdFont" | sort -u)
+    mono_only=$(fc-list :spacing=100 family | sed 's/,.*//' | grep "Nerd Font Mono" | grep -v "MonoNL\|NerdFont" | sort -u | while read -r f; do
+      base="${f% Mono}"
+      echo "$non_mono" | grep -qF "$base" || echo "$f"
+    done)
+    { echo "$non_mono"; echo "$mono_only"; } | grep -v '^$' | sort -u > "$cache"
+  fi
+  cat "$cache"
 }
 
 # Get current font from palette.conf
@@ -96,7 +101,7 @@ apply_font() {
     swaync-client -rs &>/dev/null
   fi
   if pgrep -x waybar &>/dev/null; then
-    pkill waybar; sleep 0.3; waybar &>/dev/null & disown
+    pkill -SIGUSR2 waybar
   fi
 }
 
