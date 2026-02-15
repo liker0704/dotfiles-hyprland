@@ -25,6 +25,6 @@ case "${1:-}" in
   animations) shift; source "$THEME_DIR/commands/animations.sh"; cmd_animations "$@" ;;
   backup)     source "$THEME_DIR/commands/backup.sh";            cmd_backup ;;
   help|-h|--help) source "$THEME_DIR/commands/help.sh";          cmd_help ;;
-  "")         source "$THEME_DIR/commands/help.sh";              cmd_default ;;
+  "")         source "$THEME_DIR/commands/current.sh"; source "$THEME_DIR/commands/help.sh"; cmd_default ;;
   *)          echo -e "${RED}Unknown command: $1${RESET}"; echo "Run 'theme help' for usage"; exit 1 ;;
 esac
