@@ -63,8 +63,8 @@ _restore_window_pos() {
   [[ -z "$saved_ws" ]] && return
   local saved_mon_name
   saved_mon_name=$(_mon_name "$saved_mon_id")
-  for _ in {1..20}; do
-    sleep 0.3
+  for _ in {1..50}; do
+    sleep 0.1
     local addr
     addr=$(hyprctl clients -j 2>/dev/null | python3 -c "
 import json,sys
@@ -73,9 +73,8 @@ for c in json.load(sys.stdin):
     print(c['address']); break
 " 2>/dev/null)
     if [[ -n "$addr" ]]; then
-      # Wait for window to fully initialize
-      sleep 0.5
-      # Restore tiling state first (before moving workspace)
+      sleep 0.2
+      # Restore tiling state first
       local cur_floating
       cur_floating=$(hyprctl clients -j 2>/dev/null | python3 -c "
 import json,sys
@@ -88,13 +87,9 @@ for c in json.load(sys.stdin):
       elif [[ "$saved_floating" == "1" && "$cur_floating" == "0" ]]; then
         hyprctl dispatch setfloating "address:$addr" &>/dev/null
       fi
-      # Move window to saved workspace
+      # Move to saved workspace + monitor
       hyprctl dispatch movetoworkspacesilent "$saved_ws,address:$addr" &>/dev/null
-      sleep 0.2
-      # Ensure workspace is on correct monitor
-      if [[ -n "$saved_mon_name" ]]; then
-        hyprctl dispatch moveworkspacetomonitor "$saved_ws" "$saved_mon_name" &>/dev/null
-      fi
+      [[ -n "$saved_mon_name" ]] && hyprctl dispatch moveworkspacetomonitor "$saved_ws" "$saved_mon_name" &>/dev/null
       return 0
     fi
   done
