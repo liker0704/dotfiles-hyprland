@@ -7,8 +7,8 @@ cmd_fav() {
     add)
       local name="${2:-}"
       if [[ -z "$name" ]]; then
-        # Add current theme
-        name=$(grep -oP '# Theme: \K.*' "$PALETTE" 2>/dev/null || echo "")
+        # Add current theme (strip source tag like "(Gogh)" or "(custom)")
+        name=$(grep -oP '# Theme: \K.*' "$PALETTE" 2>/dev/null | sed 's/ (Gogh)$//;s/ (custom)$//' || echo "")
         [[ -z "$name" ]] && { echo -e "${RED}No theme set${RESET}"; exit 1; }
       fi
       touch "$FAVORITES"
@@ -35,7 +35,7 @@ cmd_fav() {
         echo -e "${RED}No favorites. Use: theme fav add${RESET}"; exit 1
       fi
       local current
-      current=$(grep -oP '# Theme: \K.*' "$PALETTE" 2>/dev/null || echo "")
+      current=$(grep -oP '# Theme: \K.*' "$PALETTE" 2>/dev/null | sed 's/ (Gogh)$//;s/ (custom)$//' || echo "")
       local -a favs=()
       while IFS= read -r line; do
         [[ -n "$line" ]] && favs+=("$line")
@@ -76,7 +76,7 @@ cmd_fav() {
       source "$THEME_LIB/cache.sh"
       ensure_cache
       local current
-      current=$(grep -oP '# Theme: \K.*' "$PALETTE" 2>/dev/null || echo "")
+      current=$(grep -oP '# Theme: \K.*' "$PALETTE" 2>/dev/null | sed 's/ (Gogh)$//;s/ (custom)$//' || echo "")
       python3 << PYEOF
 import json, os, sys
 sys.path.insert(0, os.path.expanduser('~/.local/share/theme/lib'))
