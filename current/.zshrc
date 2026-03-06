@@ -1,5 +1,5 @@
 # --- Zellij auto-start (MUST BE FIRST) ---
-if [[ -z "$ZELLIJ" && -t 1 ]]; then
+if [[ -z "$ZELLIJ" && -z "$NOZELLIJ" && -t 1 ]]; then
     exec zellij attach -c main
 fi
 
