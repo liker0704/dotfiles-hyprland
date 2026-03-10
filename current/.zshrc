@@ -1,6 +1,6 @@
-# --- Zellij auto-start (MUST BE FIRST) ---
-if [[ -z "$ZELLIJ" && -z "$NOZELLIJ" && -t 1 ]]; then
-    exec zellij attach -c main
+# --- tmux auto-start (MUST BE FIRST) ---
+if [[ -z "$TMUX" && -z "$NOTERM" && -t 1 ]]; then
+    exec tmux new-session -A -s main
 fi
 
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
