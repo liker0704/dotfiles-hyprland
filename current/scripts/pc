@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+# Second PC management — sync, copy, connect
+# Usage: pc <command> [args]
+
+set -euo pipefail
+
+# Load config
+PC_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/pc/config"
+if [[ ! -f "$PC_CONFIG" ]]; then
+    echo "Missing config: $PC_CONFIG"
+    echo "Create it with: PC_HOST, PC_USER, PC_VNC_PORT"
+    exit 1
+fi
+source "$PC_CONFIG"
+
+PC2="${PC_USER}@${PC_HOST}"
+PRF="$HOME/.unison/projects.prf"
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+sync_profile() {
+    local profile="$1"
+    local label="$2"
+    echo -e "${CYAN}→ Syncing ${label}...${NC}"
+    if unison "$profile" -batch; then
+        echo -e "${GREEN}  ✓ ${label} synced${NC}"
+    else
+        echo -e "${YELLOW}  ⚠ ${label} had conflicts (resolve manually)${NC}"
+        return 1
+    fi
+}
+
+check_conn() {
+    if ! ssh -o ConnectTimeout=3 -q "$PC2" exit 2>/dev/null; then
+        echo -e "${YELLOW}✗ Second PC not reachable${NC}"
+        exit 1
+    fi
+}
+
+get_project() {
+    local current="$(pwd)"
+    local rel="${current#$HOME/projects/}"
+    if [[ "$rel" == "$current" ]]; then
+        echo -e "${YELLOW}Not inside ~/projects${NC}" >&2
+        exit 1
+    fi
+    echo "${rel%%/*}"
+}
+
+cmd="${1:-help}"
+shift 2>/dev/null || true
+
+case "$cmd" in
+    # --- Connect ---
+    ssh)
+        exec ssh "$PC2" "$@"
+        ;;
+    vnc)
+        exec vncviewer -FullScreen -FullscreenSystemKeys "${PC_HOST}:${PC_VNC_PORT}"
+        ;;
+    tmux)
+        exec ssh -t "$PC2" tmux attach "$@"
+        ;;
+
+    # --- Sync ---
+    sync)
+        check_conn
+        target="${1:-projects}"
+        case "$target" in
+            projects|p) sync_profile projects "~/projects" ;;
+            claude|c)   sync_profile claude "~/.claude/projects" ;;
+            tmux|t)     sync_profile tmux "tmux resurrect" ;;
+            all|a)
+                sync_profile projects "~/projects"
+                sync_profile claude "~/.claude/projects"
+                sync_profile tmux "tmux resurrect"
+                ;;
+            *) echo "Usage: pc sync [projects|claude|tmux|all]" ;;
+        esac
+        ;;
+    status)
+        check_conn
+        echo -e "${CYAN}Checking what's out of sync...${NC}"
+        for prof in projects claude tmux; do
+            echo -e "\n${YELLOW}${prof}:${NC}"
+            output=$(unison "$prof" -batch -ui text -dumbtty 2>&1 | grep -E "new|changed|deleted|---->|<----|<-?->") || true
+            if [[ -z "$output" ]]; then
+                echo "  (in sync)"
+            else
+                echo "$output"
+            fi
+        done
+        ;;
+
+    # --- Copy ---
+    copy)
+        check_conn
+        direction="to"
+        if [[ "${1:-}" == "--from" || "${1:-}" == "-f" ]]; then
+            direction="from"
+            shift
+        fi
+        if [[ -z "${1:-}" ]]; then
+            echo "Usage: pc copy [--from] <path>"
+            exit 1
+        fi
+        input="$1"
+        if [[ "$input" = /* ]]; then
+            abs_path="$input"
+        else
+            abs_path="$(pwd)/$input"
+        fi
+        abs_path="$(realpath -m "$abs_path")"
+        local_user="$(whoami)"
+        remote_path="${abs_path/\/home\/${local_user}\//\/home\/${PC_USER}\/}"
+
+        if [[ "$direction" == "to" ]]; then
+            remote_dir="$(dirname "$remote_path")"
+            ssh "$PC2" "mkdir -p '$remote_dir'"
+            if [[ -d "$abs_path" ]]; then
+                rsync -avz "$abs_path/" "$PC2:$remote_path/"
+            else
+                rsync -avz "$abs_path" "$PC2:$remote_path"
+            fi
+            echo -e "${GREEN}→ Copied to PC2: $remote_path${NC}"
+        else
+            local_dir="$(dirname "$abs_path")"
+            mkdir -p "$local_dir"
+            if ssh "$PC2" "test -d '$remote_path'" 2>/dev/null; then
+                rsync -avz "$PC2:$remote_path/" "$abs_path/"
+            else
+                rsync -avz "$PC2:$remote_path" "$abs_path"
+            fi
+            echo -e "${GREEN}← Copied from PC2: $abs_path${NC}"
+        fi
+        ;;
+
+    # --- Ignore/Include ---
+    ignore)
+        project="$(get_project)"
+        if grep -q "ignore = Path ${project}$" "$PRF" 2>/dev/null; then
+            echo -e "${YELLOW}Already ignored: ${project}${NC}"
+        else
+            echo "ignore = Path ${project}" >> "$PRF"
+            echo -e "${GREEN}✓ Added to ignore: ${project}${NC}"
+        fi
+        ;;
+    unignore)
+        project="$(get_project)"
+        if grep -q "ignore = Path ${project}$" "$PRF" 2>/dev/null; then
+            sed -i "\|ignore = Path ${project}$|d" "$PRF"
+            echo -e "${GREEN}✓ Removed from ignore: ${project}${NC}"
+        else
+            echo -e "${YELLOW}Not in ignore list: ${project}${NC}"
+        fi
+        ;;
+    include)
+        check_conn
+        project="$(get_project)"
+        echo -e "${CYAN}→ Syncing ${project} (all files, no ignores)...${NC}"
+        rsync -avz --delete \
+            "$HOME/projects/${project}/" \
+            "$PC2:~/projects/${project}/"
+        echo -e "${GREEN}✓ ${project} fully synced (all files)${NC}"
+        ;;
+    ls)
+        echo -e "${CYAN}Ignored projects:${NC}"
+        grep "ignore = Path " "$PRF" 2>/dev/null | sed 's/ignore = Path /  /' || echo "  (none)"
+        echo -e "\n${CYAN}Ignored patterns:${NC}"
+        grep "ignore = Name " "$PRF" 2>/dev/null | sed 's/ignore = Name /  /' || echo "  (none)"
+        ;;
+
+    # --- Init ---
+    init)
+        echo -e "${CYAN}Generating Unison profiles from templates...${NC}"
+        tpl_dir="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles-hyprland/current/unison"
+        # Also check dotfiles repo
+        for d in "$HOME/projects/dotfiles-hyprland/current/unison" "$tpl_dir"; do
+            [[ -d "$d" ]] && tpl_dir="$d" && break
+        done
+        if [[ ! -d "$tpl_dir" ]]; then
+            echo -e "${YELLOW}No templates found${NC}"
+            exit 1
+        fi
+        mkdir -p "$HOME/.unison"
+        remote_home="/home/${PC_USER}"
+        for tpl in "$tpl_dir"/*.prf.tpl; do
+            [[ -f "$tpl" ]] || continue
+            name="$(basename "$tpl" .tpl)"
+            sed -e "s|{{HOME}}|$HOME|g" \
+                -e "s|{{PC_USER}}|$PC_USER|g" \
+                -e "s|{{PC_HOST}}|$PC_HOST|g" \
+                -e "s|{{REMOTE_HOME}}|$remote_home|g" \
+                "$tpl" > "$HOME/.unison/$name"
+            echo -e "${GREEN}  ✓ ~/.unison/$name${NC}"
+        done
+        echo -e "${GREEN}Done. Run 'pc sync' to start syncing.${NC}"
+        ;;
+
+    # --- Help ---
+    *)
+        echo "Usage: pc <command>"
+        echo ""
+        echo "Connect:"
+        echo "  ssh           - SSH to second PC"
+        echo "  vnc           - VNC to Hyprland session"
+        echo "  tmux          - attach to tmux on second PC"
+        echo ""
+        echo "Sync:"
+        echo "  sync [p|c|t|a]  - sync projects/claude/tmux/all"
+        echo "  status          - show what's out of sync"
+        echo ""
+        echo "Copy:"
+        echo "  copy <path>        - copy file/dir to PC2 (same path)"
+        echo "  copy --from <path> - copy from PC2"
+        echo ""
+        echo "Manage:"
+        echo "  ignore        - ignore current project from sync"
+        echo "  unignore      - remove from ignore"
+        echo "  include       - sync current project (ALL files, no ignores)"
+        echo "  ls            - list ignored projects and patterns"
+        echo "  init          - generate Unison profiles from templates"
+        ;;
+esac
