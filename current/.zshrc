@@ -49,7 +49,6 @@ export ANDROID_HOME=$HOME/Android/Sdk
 export PATH=$PATH:$ANDROID_HOME/emulator
 export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
 export PATH=$PATH:$ANDROID_HOME/platform-tools
-export PATH=$PATH:/home/liker/progs/android-studio/bin
 
 # --- NVM (Node Version Manager) ---
 export NVM_DIR="$HOME/.nvm"
@@ -81,22 +80,14 @@ theme() {
   return $rc
 }
 
-# --- Conda Initialize ---
-# !! Блок Conda всегда должен быть в конце !!
-__conda_setup="$('/home/liker/miniconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
-else
-    if [ -f "/home/liker/miniconda3/etc/profile.d/conda.sh" ]; then
-        . "/home/liker/miniconda3/etc/profile.d/conda.sh"
-    else
-        export PATH="/home/liker/miniconda3/bin:$PATH"
-    fi
-fi
-unset __conda_setup
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+
+# Use native Claude Code binary
+claude() {
+  command "$HOME/.local/bin/claude" "$@"
+}
 
 # Claude Code alias with auto-skip permissions
 alias cc="claude --dangerously-skip-permissions"
@@ -116,10 +107,6 @@ function y() {
 	rm -f -- "$tmp"
 }
 
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-
-# bun completions
-[ -s "/home/liker/.bun/_bun" ] && source "/home/liker/.bun/_bun"
 
 # bun
 export BUN_INSTALL="$HOME/.bun"
@@ -132,5 +119,7 @@ export PATH="$PATH:$HOME/go/bin"
 export PATH="$PATH:$HOME/scripts"
 
 
-# opencode
-export PATH=/home/liker/.opencode/bin:$PATH
+alias cod='codex --dangerously-bypass-approvals-and-sandbox'
+
+# Machine-specific overrides (not in git)
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
