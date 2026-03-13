@@ -49,8 +49,11 @@ sync_claude() {
     local rsync_flag="--update"
     [[ "$SYNC_KEEP" == "1" ]] && rsync_flag="--ignore-existing"
 
-    local backup_dir="$HOME/.claude/backups"
-    local backup_flag="--backup --backup-dir=${backup_dir} --suffix=.$(date +%Y%m%d-%H%M%S)"
+    local backup_dir="$HOME/.claude/backup"
+    # Clear old backup, keep only the latest
+    rm -rf "$backup_dir"
+    mkdir -p "$backup_dir"
+    local backup_flag="--backup --backup-dir=${backup_dir}"
 
     echo -e "${CYAN}→ Syncing Claude dialogs (with path translation)...${NC}"
 
@@ -223,6 +226,48 @@ case "$cmd" in
         fi
         ;;
 
+    # --- Backup ---
+    backup)
+        local backup_dir="$HOME/.claude/backup"
+        subcmd="${1:-help}"
+        case "$subcmd" in
+            apply)
+                if [[ ! -d "$backup_dir" ]] || [[ -z "$(ls -A "$backup_dir" 2>/dev/null)" ]]; then
+                    echo -e "${YELLOW}No backup found${NC}"
+                    exit 1
+                fi
+                # Restore backed up files to their original locations
+                local restored=0
+                while IFS= read -r -d '' f; do
+                    local rel="${f#$backup_dir/}"
+                    local dest="$HOME/.claude/projects/$rel"
+                    mkdir -p "$(dirname "$dest")"
+                    cp "$f" "$dest"
+                    ((restored++))
+                done < <(find "$backup_dir" -type f -print0)
+                echo -e "${GREEN}✓ Restored $restored files from backup${NC}"
+                ;;
+            ls)
+                if [[ ! -d "$backup_dir" ]] || [[ -z "$(ls -A "$backup_dir" 2>/dev/null)" ]]; then
+                    echo -e "${YELLOW}No backup found${NC}"
+                else
+                    echo -e "${CYAN}Backed up files:${NC}"
+                    find "$backup_dir" -type f | sed "s|$backup_dir/||"
+                fi
+                ;;
+            clear)
+                rm -rf "$backup_dir"
+                echo -e "${GREEN}✓ Backup cleared${NC}"
+                ;;
+            *)
+                echo "Usage: pc backup <command>"
+                echo "  apply  - restore backed up Claude dialogs"
+                echo "  ls     - list backed up files"
+                echo "  clear  - delete backup"
+                ;;
+        esac
+        ;;
+
     # --- Ignore/Include ---
     ignore)
         project="$(get_project)"
@@ -313,6 +358,11 @@ case "$cmd" in
         echo ""
         echo "Copy:"
         echo "  copy [--from] <path>  - copy file/dir to/from PC2 (same path)"
+        echo ""
+        echo "Backup:"
+        echo "  backup apply  - restore Claude dialogs from last backup"
+        echo "  backup ls     - list backed up files"
+        echo "  backup clear  - delete backup"
         echo ""
         echo "Manage:"
         echo "  ignore            - ignore current project from sync"
