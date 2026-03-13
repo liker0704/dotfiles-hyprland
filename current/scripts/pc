@@ -14,6 +14,7 @@ fi
 source "$PC_CONFIG"
 
 PC2="${PC_USER}@${PC_HOST}"
+LOCAL_USER="$(whoami)"
 PRF="$HOME/.unison/projects.prf"
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -23,13 +24,79 @@ NC='\033[0m'
 sync_profile() {
     local profile="$1"
     local label="$2"
+    local retries=3
     echo -e "${CYAN}→ Syncing ${label}...${NC}"
-    if unison "$profile" -batch; then
-        echo -e "${GREEN}  ✓ ${label} synced${NC}"
-    else
-        echo -e "${YELLOW}  ⚠ ${label} had conflicts (resolve manually)${NC}"
-        return 1
-    fi
+    for i in $(seq 1 $retries); do
+        if unison "$profile" -batch 2>&1; then
+            echo -e "${GREEN}  ✓ ${label} synced${NC}"
+            return 0
+        fi
+        if [[ $i -lt $retries ]]; then
+            echo -e "${YELLOW}  ↻ Retry $((i+1))/$retries (file changed during sync)...${NC}"
+            sleep 1
+        fi
+    done
+    echo -e "${YELLOW}  ⚠ ${label} failed after $retries attempts${NC}"
+    return 1
+}
+
+sync_claude() {
+    local local_dir="$HOME/.claude/projects"
+    local remote_dir="/home/${PC_USER}/.claude/projects"
+    local local_prefix="-home-${LOCAL_USER}"
+    local remote_prefix="-home-${PC_USER}"
+    local count=0
+
+    echo -e "${CYAN}→ Syncing Claude dialogs (with path translation)...${NC}"
+
+    # Push: local dirs → remote (rename local user → remote user)
+    for dir in "$local_dir"/${local_prefix}*; do
+        [[ -d "$dir" ]] || continue
+        local basename="$(basename "$dir")"
+        local remote_name="${basename/$local_prefix/$remote_prefix}"
+        rsync -az "$dir/" "$PC2:${remote_dir}/${remote_name}/" 2>/dev/null && ((count++)) || true
+    done
+
+    # Pull: remote dirs → local (rename remote user → local user)
+    local remote_dirs
+    remote_dirs=$(ssh "$PC2" "ls -d ${remote_dir}/${remote_prefix}* 2>/dev/null" 2>/dev/null) || true
+    while IFS= read -r rdir; do
+        [[ -z "$rdir" ]] && continue
+        local basename="$(basename "$rdir")"
+        local local_name="${basename/$remote_prefix/$local_prefix}"
+        rsync -az "$PC2:${rdir}/" "${local_dir}/${local_name}/" 2>/dev/null && ((count++)) || true
+    done <<< "$remote_dirs"
+
+    echo -e "${GREEN}  ✓ Claude dialogs synced ($count dirs)${NC}"
+}
+
+sync_tmux() {
+    local local_dir="$HOME/.local/share/tmux/resurrect"
+    local remote_dir="/home/${PC_USER}/.local/share/tmux/resurrect"
+    local tmp_dir="/tmp/pc-tmux-sync-$$"
+
+    echo -e "${CYAN}→ Syncing tmux sessions (with path translation)...${NC}"
+
+    # Push: copy local files, replace paths, send to remote
+    mkdir -p "$tmp_dir"
+    for f in "$local_dir"/*; do
+        [[ -f "$f" ]] || continue
+        sed "s|/home/${LOCAL_USER}/|/home/${PC_USER}/|g" "$f" > "$tmp_dir/$(basename "$f")"
+    done
+    rsync -az "$tmp_dir/" "$PC2:${remote_dir}/" 2>/dev/null || true
+
+    # Pull: get remote files, replace paths, save locally
+    rm -rf "$tmp_dir"
+    mkdir -p "$tmp_dir"
+    rsync -az "$PC2:${remote_dir}/" "$tmp_dir/" 2>/dev/null || true
+    for f in "$tmp_dir"/*; do
+        [[ -f "$f" ]] || continue
+        local basename="$(basename "$f")"
+        sed "s|/home/${PC_USER}/|/home/${LOCAL_USER}/|g" "$f" > "${local_dir}/${basename}"
+    done
+    rm -rf "$tmp_dir"
+
+    echo -e "${GREEN}  ✓ tmux sessions synced${NC}"
 }
 
 check_conn() {
@@ -70,12 +137,12 @@ case "$cmd" in
         target="${1:-projects}"
         case "$target" in
             projects|p) sync_profile projects "~/projects" ;;
-            claude|c)   sync_profile claude "~/.claude/projects" ;;
-            tmux|t)     sync_profile tmux "tmux resurrect" ;;
+            claude|c)   sync_claude ;;
+            tmux|t)     sync_tmux ;;
             all|a)
                 sync_profile projects "~/projects"
-                sync_profile claude "~/.claude/projects"
-                sync_profile tmux "tmux resurrect"
+                sync_claude
+                sync_tmux
                 ;;
             *) echo "Usage: pc sync [projects|claude|tmux|all]" ;;
         esac
@@ -83,15 +150,17 @@ case "$cmd" in
     status)
         check_conn
         echo -e "${CYAN}Checking what's out of sync...${NC}"
-        for prof in projects claude tmux; do
-            echo -e "\n${YELLOW}${prof}:${NC}"
-            output=$(unison "$prof" -batch -ui text -dumbtty 2>&1 | grep -E "new|changed|deleted|---->|<----|<-?->") || true
-            if [[ -z "$output" ]]; then
-                echo "  (in sync)"
-            else
-                echo "$output"
-            fi
-        done
+        echo -e "\n${YELLOW}projects:${NC}"
+        output=$(unison projects -batch -ui text -dumbtty 2>&1 | grep -E "new|changed|deleted|---->|<----|<-?->") || true
+        if [[ -z "$output" ]]; then
+            echo "  (in sync)"
+        else
+            echo "$output"
+        fi
+        echo -e "\n${YELLOW}claude:${NC}"
+        echo "  (use 'pc sync c' — bidirectional with path translation)"
+        echo -e "\n${YELLOW}tmux:${NC}"
+        echo "  (use 'pc sync t' — bidirectional with path translation)"
         ;;
 
     # --- Copy ---
@@ -158,12 +227,25 @@ case "$cmd" in
         ;;
     include)
         check_conn
+        direction="to"
+        if [[ "${1:-}" == "--from" || "${1:-}" == "-f" ]]; then
+            direction="from"
+            shift
+        fi
         project="$(get_project)"
-        echo -e "${CYAN}→ Syncing ${project} (all files, no ignores)...${NC}"
-        rsync -avz --delete \
-            "$HOME/projects/${project}/" \
-            "$PC2:~/projects/${project}/"
-        echo -e "${GREEN}✓ ${project} fully synced (all files)${NC}"
+        if [[ "$direction" == "to" ]]; then
+            echo -e "${CYAN}→ Pushing ${project} (all files, no ignores)...${NC}"
+            rsync -avz --delete \
+                "$HOME/projects/${project}/" \
+                "$PC2:~/projects/${project}/"
+            echo -e "${GREEN}→ ${project} pushed to PC2 (all files)${NC}"
+        else
+            echo -e "${CYAN}← Pulling ${project} (all files, no ignores)...${NC}"
+            rsync -avz --delete \
+                "$PC2:~/projects/${project}/" \
+                "$HOME/projects/${project}/"
+            echo -e "${GREEN}← ${project} pulled from PC2 (all files)${NC}"
+        fi
         ;;
     ls)
         echo -e "${CYAN}Ignored projects:${NC}"
@@ -213,14 +295,16 @@ case "$cmd" in
         echo "  status          - show what's out of sync"
         echo ""
         echo "Copy:"
-        echo "  copy <path>        - copy file/dir to PC2 (same path)"
-        echo "  copy --from <path> - copy from PC2"
+        echo "  copy [--from] <path>  - copy file/dir to/from PC2 (same path)"
         echo ""
         echo "Manage:"
-        echo "  ignore        - ignore current project from sync"
-        echo "  unignore      - remove from ignore"
-        echo "  include       - sync current project (ALL files, no ignores)"
-        echo "  ls            - list ignored projects and patterns"
-        echo "  init          - generate Unison profiles from templates"
+        echo "  ignore            - ignore current project from sync"
+        echo "  unignore          - remove from ignore"
+        echo "  include [--from]  - sync current project (ALL files, no ignores)"
+        echo "  ls                - list ignored projects and patterns"
+        echo "  init              - generate Unison profiles from templates"
+        echo ""
+        echo "Flags:"
+        echo "  --from / -f       - reverse direction (PC2 → laptop)"
         ;;
 esac
