@@ -46,6 +46,8 @@ sync_claude() {
     local local_prefix="-home-${LOCAL_USER}"
     local remote_prefix="-home-${PC_USER}"
     local count=0
+    local rsync_flag="--update"
+    [[ "$SYNC_KEEP" == "1" ]] && rsync_flag="--ignore-existing"
 
     echo -e "${CYAN}→ Syncing Claude dialogs (with path translation)...${NC}"
 
@@ -54,7 +56,7 @@ sync_claude() {
         [[ -d "$dir" ]] || continue
         local basename="$(basename "$dir")"
         local remote_name="${basename/$local_prefix/$remote_prefix}"
-        rsync -az "$dir/" "$PC2:${remote_dir}/${remote_name}/" 2>/dev/null && ((count++)) || true
+        rsync -az $rsync_flag "$dir/" "$PC2:${remote_dir}/${remote_name}/" 2>/dev/null && ((count++)) || true
     done
 
     # Pull: remote dirs → local (rename remote user → local user)
@@ -64,7 +66,7 @@ sync_claude() {
         [[ -z "$rdir" ]] && continue
         local basename="$(basename "$rdir")"
         local local_name="${basename/$remote_prefix/$local_prefix}"
-        rsync -az "$PC2:${rdir}/" "${local_dir}/${local_name}/" 2>/dev/null && ((count++)) || true
+        rsync -az $rsync_flag "$PC2:${rdir}/" "${local_dir}/${local_name}/" 2>/dev/null && ((count++)) || true
     done <<< "$remote_dirs"
 
     echo -e "${GREEN}  ✓ Claude dialogs synced ($count dirs)${NC}"
@@ -83,7 +85,9 @@ sync_tmux() {
         [[ -f "$f" ]] || continue
         sed "s|/home/${LOCAL_USER}/|/home/${PC_USER}/|g" "$f" > "$tmp_dir/$(basename "$f")"
     done
-    rsync -az "$tmp_dir/" "$PC2:${remote_dir}/" 2>/dev/null || true
+    local rsync_flag="--update"
+    [[ "$SYNC_KEEP" == "1" ]] && rsync_flag="--ignore-existing"
+    rsync -az $rsync_flag "$tmp_dir/" "$PC2:${remote_dir}/" 2>/dev/null || true
 
     # Pull: get remote files, replace paths, save locally
     rm -rf "$tmp_dir"
@@ -134,6 +138,15 @@ case "$cmd" in
     # --- Sync ---
     sync)
         check_conn
+        SYNC_KEEP=0
+        # Parse flags
+        while [[ "${1:-}" == -* ]]; do
+            case "$1" in
+                --keep|-k) SYNC_KEEP=1; shift ;;
+                *) shift ;;
+            esac
+        done
+        export SYNC_KEEP
         target="${1:-projects}"
         case "$target" in
             projects|p) sync_profile projects "~/projects" ;;
@@ -144,7 +157,7 @@ case "$cmd" in
                 sync_claude
                 sync_tmux
                 ;;
-            *) echo "Usage: pc sync [projects|claude|tmux|all]" ;;
+            *) echo "Usage: pc sync [-k|--keep] [projects|claude|tmux|all]" ;;
         esac
         ;;
     status)
@@ -306,5 +319,6 @@ case "$cmd" in
         echo ""
         echo "Flags:"
         echo "  --from / -f       - reverse direction (PC2 → laptop)"
+        echo "  --keep / -k       - don't touch files that exist on both (sync only new)"
         ;;
 esac
