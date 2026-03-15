@@ -135,8 +135,8 @@ case "$cmd" in
     ssh)
         exec ssh "$PC2" "$@"
         ;;
-    vnc)
-        exec vncviewer -FullScreen -FullscreenSystemKeys "${PC_HOST}:${PC_VNC_PORT}"
+    vnc|rdp)
+        exec xfreerdp3 /v:"${PC_HOST}" /u:"${PC_USER}" /p:"${PC_USER}" /dynamic-resolution /f /sound +clipboard /cert:ignore
         ;;
     tmux)
         exec ssh -t "$PC2" tmux attach "$@"
