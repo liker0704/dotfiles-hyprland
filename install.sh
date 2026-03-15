@@ -73,7 +73,7 @@ DIR_MAPS=(
   "waybar:$REAL_HOME/.config/waybar"
   "alacritty:$REAL_HOME/.config/alacritty"
   "fontconfig:$REAL_HOME/.config/fontconfig"
-  "zellij:$REAL_HOME/.config/zellij"
+  "tmux:$REAL_HOME/.config/tmux"
   "theme:$REAL_HOME/.config/theme"
 )
 
@@ -81,6 +81,7 @@ DIR_MAPS=(
 FILE_MAPS=(
   "scripts/theme:$REAL_HOME/.local/bin/theme"
   "scripts/mpvpaper-stop:$REAL_HOME/.local/bin/mpvpaper-stop"
+  "scripts/pc:$REAL_HOME/.local/bin/pc"
   ".zshrc:$REAL_HOME/.zshrc"
   ".p10k.zsh:$REAL_HOME/.p10k.zsh"
 )
@@ -217,7 +218,7 @@ for map in "${FILE_MAPS[@]}"; do
 done
 
 # Make scripts executable
-chmod +x "$REAL_HOME/.local/bin/theme" "$REAL_HOME/.local/bin/mpvpaper-stop" 2>/dev/null
+chmod +x "$REAL_HOME/.local/bin/theme" "$REAL_HOME/.local/bin/mpvpaper-stop" "$REAL_HOME/.local/bin/pc" 2>/dev/null
 
 # --- Fix ownership (running as sudo) ---
 chown -R "$REAL_USER:$REAL_USER" \
@@ -227,6 +228,21 @@ chown -R "$REAL_USER:$REAL_USER" \
   "$REAL_HOME/.zshrc" \
   "$REAL_HOME/.p10k.zsh" \
   2>/dev/null || true
+
+# --- tmux plugins ---
+TMUX_PLUGINS="$REAL_HOME/.tmux/plugins"
+declare -A TMUX_REPOS=(
+  [tmux-resurrect]="https://github.com/tmux-plugins/tmux-resurrect"
+  [tmux-continuum]="https://github.com/tmux-plugins/tmux-continuum"
+)
+for plugin in "${!TMUX_REPOS[@]}"; do
+  if [[ ! -d "$TMUX_PLUGINS/$plugin" ]]; then
+    sudo -u "$REAL_USER" git clone --depth 1 "${TMUX_REPOS[$plugin]}" "$TMUX_PLUGINS/$plugin" >/dev/null 2>&1
+    log_ok "tmux plugin: $plugin (installed)"
+  else
+    log_ok "tmux plugin: $plugin (exists)"
+  fi
+done
 
 # --- Symlink for rofi ---
 echo ""

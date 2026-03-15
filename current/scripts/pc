@@ -180,21 +180,21 @@ case "$cmd" in
         fi
 
         echo -e "\n${YELLOW}claude:${NC}"
-        local claude_local="$HOME/.claude/projects"
-        local claude_remote="/home/${PC_USER}/.claude/projects"
-        local claude_local_prefix="-home-${LOCAL_USER}"
-        local claude_remote_prefix="-home-${PC_USER}"
-        local claude_diff=""
+        claude_local="$HOME/.claude/projects"
+        claude_remote="/home/${PC_USER}/.claude/projects"
+        claude_local_prefix="-home-${LOCAL_USER}"
+        claude_remote_prefix="-home-${PC_USER}"
+        claude_diff=""
         # Check local-only dirs
         for dir in "$claude_local"/${claude_local_prefix}*; do
             [[ -d "$dir" ]] || continue
-            local bname="$(basename "$dir")"
-            local rname="${bname/$claude_local_prefix/$claude_remote_prefix}"
+            bname="$(basename "$dir")"
+            rname="${bname/$claude_local_prefix/$claude_remote_prefix}"
             if ! ssh -q "$PC2" "test -d '${claude_remote}/${rname}'" 2>/dev/null; then
                 claude_diff+="  → ${bname} (local only)\n"
             else
-                local lcount=$(find "$dir" -type f | wc -l)
-                local rcount=$(ssh -q "$PC2" "find '${claude_remote}/${rname}' -type f | wc -l" 2>/dev/null) || rcount=0
+                lcount=$(find "$dir" -type f | wc -l)
+                rcount=$(ssh -q "$PC2" "find '${claude_remote}/${rname}' -type f | wc -l" 2>/dev/null) || rcount=0
                 if [[ "$lcount" != "$rcount" ]]; then
                     claude_diff+="  ↔ ${bname} (local: ${lcount} files, remote: ${rcount} files)\n"
                 fi
@@ -204,8 +204,8 @@ case "$cmd" in
         remote_claude=$(ssh -q "$PC2" "ls -d ${claude_remote}/${claude_remote_prefix}* 2>/dev/null" 2>/dev/null) || true
         while IFS= read -r rdir; do
             [[ -z "$rdir" ]] && continue
-            local bname="$(basename "$rdir")"
-            local lname="${bname/$claude_remote_prefix/$claude_local_prefix}"
+            bname="$(basename "$rdir")"
+            lname="${bname/$claude_remote_prefix/$claude_local_prefix}"
             if [[ ! -d "${claude_local}/${lname}" ]]; then
                 claude_diff+="  ← ${bname} (remote only)\n"
             fi
@@ -217,10 +217,10 @@ case "$cmd" in
         fi
 
         echo -e "\n${YELLOW}tmux:${NC}"
-        local tmux_local="$HOME/.local/share/tmux/resurrect"
-        local tmux_remote="/home/${PC_USER}/.local/share/tmux/resurrect"
-        local lfiles=$(find "$tmux_local" -type f -name "*.txt" 2>/dev/null | wc -l)
-        local rfiles=$(ssh -q "$PC2" "find '${tmux_remote}' -type f -name '*.txt' 2>/dev/null | wc -l") || rfiles=0
+        tmux_local="$HOME/.local/share/tmux/resurrect"
+        tmux_remote="/home/${PC_USER}/.local/share/tmux/resurrect"
+        lfiles=$(find "$tmux_local" -type f -name "*.txt" 2>/dev/null | wc -l)
+        rfiles=$(ssh -q "$PC2" "find '${tmux_remote}' -type f -name '*.txt' 2>/dev/null | wc -l") || rfiles=0
         if [[ "$lfiles" == "$rfiles" ]]; then
             echo "  (in sync — ${lfiles} files)"
         else
