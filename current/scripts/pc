@@ -172,7 +172,7 @@ case "$cmd" in
         echo -e "${CYAN}Checking what's out of sync...${NC}"
 
         echo -e "\n${YELLOW}projects:${NC}"
-        output=$(unison projects -batch -dryrun -ui text -dumbtty 2>&1 | grep -E "new|changed|deleted|---->|<----|<-?->") || true
+        output=$(echo n | unison projects -ui text -dumbtty 2>&1 | grep -E "new|changed|deleted|---->|<----|<-?->") || true
         if [[ -z "$output" ]]; then
             echo "  (in sync)"
         else
