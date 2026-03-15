@@ -58,7 +58,7 @@ sync_claude() {
     echo -e "${CYAN}→ Syncing Claude dialogs (with path translation)...${NC}"
 
     # Push: local dirs → remote (rename local user → remote user)
-    for dir in "$local_dir"/${local_prefix}*; do
+    for dir in "$local_dir"/${local_prefix} "$local_dir"/${local_prefix}-*; do
         [[ -d "$dir" ]] || continue
         local basename="$(basename "$dir")"
         local remote_name="${basename/$local_prefix/$remote_prefix}"
@@ -68,7 +68,7 @@ sync_claude() {
     # Pull: remote dirs → local (rename remote user → local user)
     # Backup locally before overwriting
     local remote_dirs
-    remote_dirs=$(ssh "$PC2" "ls -d ${remote_dir}/${remote_prefix}* 2>/dev/null" 2>/dev/null) || true
+    remote_dirs=$(ssh "$PC2" "ls -d ${remote_dir}/${remote_prefix} ${remote_dir}/${remote_prefix}-* 2>/dev/null" 2>/dev/null) || true
     while IFS= read -r rdir; do
         [[ -z "$rdir" ]] && continue
         local basename="$(basename "$rdir")"
@@ -160,7 +160,7 @@ case "$cmd" in
             claude|c)   sync_claude ;;
             tmux|t)     sync_tmux ;;
             all|a)
-                sync_profile projects "~/projects"
+                sync_profile projects "~/projects" || true
                 sync_claude
                 sync_tmux
                 ;;
@@ -186,7 +186,7 @@ case "$cmd" in
         claude_remote_prefix="-home-${PC_USER}"
         claude_diff=""
         # Check local-only dirs
-        for dir in "$claude_local"/${claude_local_prefix}*; do
+        for dir in "$claude_local"/${claude_local_prefix} "$claude_local"/${claude_local_prefix}-*; do
             [[ -d "$dir" ]] || continue
             bname="$(basename "$dir")"
             rname="${bname/$claude_local_prefix/$claude_remote_prefix}"
@@ -201,7 +201,7 @@ case "$cmd" in
             fi
         done
         # Check remote-only dirs
-        remote_claude=$(ssh -q "$PC2" "ls -d ${claude_remote}/${claude_remote_prefix}* 2>/dev/null" 2>/dev/null) || true
+        remote_claude=$(ssh -q "$PC2" "ls -d ${claude_remote}/${claude_remote_prefix} ${claude_remote}/${claude_remote_prefix}-* 2>/dev/null" 2>/dev/null) || true
         while IFS= read -r rdir; do
             [[ -z "$rdir" ]] && continue
             bname="$(basename "$rdir")"
