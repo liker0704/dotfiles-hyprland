@@ -45,38 +45,55 @@ sync_claude() {
     local remote_dir="/home/${PC_USER}/.claude/projects"
     local local_prefix="-home-${LOCAL_USER}"
     local remote_prefix="-home-${PC_USER}"
-    local count=0
     local rsync_flag="--update"
     [[ "$SYNC_KEEP" == "1" ]] && rsync_flag="--ignore-existing"
 
     local backup_dir="$HOME/.claude/backup"
-    # Clear old backup, keep only the latest
     rm -rf "$backup_dir"
     mkdir -p "$backup_dir"
     local backup_flag="--backup --backup-dir=${backup_dir}"
+    local local_home="/home/${LOCAL_USER}"
+    local remote_home="/home/${PC_USER}"
+    local max_jobs=8
 
     echo -e "${CYAN}→ Syncing Claude dialogs (with path translation)...${NC}"
 
-    # Push: local dirs → remote (rename local user → remote user)
+    # Push: local dirs → remote (parallel, max $max_jobs)
+    local push_count=0
     for dir in "$local_dir"/${local_prefix} "$local_dir"/${local_prefix}-*; do
         [[ -d "$dir" ]] || continue
         local basename="$(basename "$dir")"
         local remote_name="${basename/$local_prefix/$remote_prefix}"
-        rsync -az $rsync_flag "$dir/" "$PC2:${remote_dir}/${remote_name}/" 2>/dev/null && ((count++)) || true
+        rsync -az $rsync_flag "$dir/" "$PC2:${remote_dir}/${remote_name}/" 2>/dev/null &
+        push_count=$((push_count + 1))
+        (( push_count % max_jobs == 0 )) && wait
     done
+    wait
 
-    # Pull: remote dirs → local (rename remote user → local user)
-    # Backup locally before overwriting
+    # Pull: remote dirs → local (parallel, max $max_jobs)
+    local pull_count=0
     local remote_dirs
     remote_dirs=$(ssh "$PC2" "ls -d ${remote_dir}/${remote_prefix} ${remote_dir}/${remote_prefix}-* 2>/dev/null" 2>/dev/null) || true
     while IFS= read -r rdir; do
         [[ -z "$rdir" ]] && continue
         local basename="$(basename "$rdir")"
         local local_name="${basename/$remote_prefix/$local_prefix}"
-        rsync -az $rsync_flag $backup_flag "$PC2:${rdir}/" "${local_dir}/${local_name}/" 2>/dev/null && ((count++)) || true
+        rsync -az $rsync_flag $backup_flag "$PC2:${rdir}/" "${local_dir}/${local_name}/" 2>/dev/null &
+        pull_count=$((pull_count + 1))
+        (( pull_count % max_jobs == 0 )) && wait
     done <<< "$remote_dirs"
+    wait
 
-    echo -e "${GREEN}  ✓ Claude dialogs synced ($count dirs)${NC}"
+    # Translate paths in parallel: local sed + remote sed
+    find "$local_dir" -maxdepth 2 -name "*.jsonl" -print0 2>/dev/null | \
+        xargs -0 -r grep -l "${remote_home}/" 2>/dev/null | \
+        xargs -r -P4 sed -i "s|${remote_home}/|${local_home}/|g" 2>/dev/null &
+    ssh "$PC2" "find '${remote_dir}' -maxdepth 2 -name '*.jsonl' -print0 2>/dev/null | \
+        xargs -0 -r grep -l '${local_home}/' 2>/dev/null | \
+        xargs -r -P4 sed -i 's|${local_home}/|${remote_home}/|g'" 2>/dev/null &
+    wait
+
+    echo -e "${GREEN}  ✓ Claude dialogs synced (${push_count} push, ${pull_count} pull)${NC}"
 }
 
 sync_tmux() {
