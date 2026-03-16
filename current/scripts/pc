@@ -21,6 +21,16 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+_claude_sed_preserve_mtime() {
+    local dir="$1" old="$2" new="$3"
+    for f in $(grep -rl "$old" "$dir" --include="*.jsonl" 2>/dev/null); do
+        local mt
+        mt=$(stat -c %Y "$f")
+        sed -i "s|${old}|${new}|g" "$f"
+        touch -d @"$mt" "$f"
+    done
+}
+
 sync_profile() {
     local profile="$1"
     local label="$2"
@@ -84,13 +94,16 @@ sync_claude() {
     done <<< "$remote_dirs"
     wait
 
-    # Translate paths in parallel: local sed + remote sed
-    find "$local_dir" -maxdepth 2 -name "*.jsonl" -print0 2>/dev/null | \
-        xargs -0 -r grep -l "${remote_home}/" 2>/dev/null | \
-        xargs -r -P4 sed -i "s|${remote_home}/|${local_home}/|g" 2>/dev/null &
-    ssh "$PC2" "find '${remote_dir}' -maxdepth 2 -name '*.jsonl' -print0 2>/dev/null | \
-        xargs -0 -r grep -l '${local_home}/' 2>/dev/null | \
-        xargs -r -P4 sed -i 's|${local_home}/|${remote_home}/|g'" 2>/dev/null &
+    # Translate paths preserving mtime (local)
+    _claude_sed_preserve_mtime "$local_dir" "${remote_home}/" "${local_home}/" &
+    # Translate paths preserving mtime (remote)
+    ssh "$PC2" "bash -c '
+        for f in \$(grep -rl \"${local_home}/\" \"${remote_dir}\" --include=\"*.jsonl\" 2>/dev/null); do
+            mt=\$(stat -c %Y \"\$f\")
+            sed -i \"s|${local_home}/|${remote_home}/|g\" \"\$f\"
+            touch -d @\"\$mt\" \"\$f\"
+        done
+    '" 2>/dev/null &
     wait
 
     echo -e "${GREEN}  ✓ Claude dialogs synced (${push_count} push, ${pull_count} pull)${NC}"
