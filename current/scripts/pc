@@ -406,6 +406,318 @@ case "$cmd" in
         echo -e "${GREEN}Done. Run 'pc sync' to start syncing.${NC}"
         ;;
 
+    # --- Session Transfer ---
+    session)
+        subcmd="${1:-help}"
+        shift 2>/dev/null || true
+        case "$subcmd" in
+            save)
+                manifest="$HOME/.config/pc/session-manifest.json"
+                mkdir -p "$(dirname "$manifest")"
+                echo -e "${CYAN}→ Capturing tmux sessions...${NC}"
+
+                # Build manifest: for each tmux pane, capture layout + detect claude sessionId
+                python3 - "$manifest" <<'PYEOF'
+import subprocess, json, sys, os
+
+manifest_path = sys.argv[1]
+local_user = os.environ.get("USER", "liker")
+home = os.path.expanduser("~")
+
+# Get all tmux panes
+result = subprocess.run(
+    ["tmux", "list-panes", "-a", "-F",
+     "#{session_name}\t#{window_index}\t#{window_name}\t#{pane_index}\t#{pane_current_path}\t#{pane_pid}"],
+    capture_output=True, text=True
+)
+if result.returncode != 0:
+    print("  No tmux server running")
+    sys.exit(1)
+
+# Get all window layouts
+layouts = {}
+wl = subprocess.run(
+    ["tmux", "list-windows", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_layout}"],
+    capture_output=True, text=True
+)
+for line in wl.stdout.strip().split("\n"):
+    if not line: continue
+    parts = line.split("\t")
+    layouts[f"{parts[0]}:{parts[1]}"] = parts[2]
+
+# Load history.jsonl for session mapping
+history = {}
+history_file = os.path.join(home, ".claude", "history.jsonl")
+if os.path.exists(history_file):
+    with open(history_file) as f:
+        for line in f:
+            try:
+                d = json.loads(line)
+                sid = d.get("sessionId", "")
+                proj = d.get("project", "")
+                ts = d.get("timestamp", 0)
+                if sid and proj:
+                    if proj not in history:
+                        history[proj] = {}
+                    if sid not in history[proj] or ts > history[proj][sid]:
+                        history[proj][sid] = ts
+            except json.JSONDecodeError:
+                continue
+
+# Process panes
+sessions = {}
+for line in result.stdout.strip().split("\n"):
+    if not line: continue
+    parts = line.split("\t")
+    sess, win_idx, win_name, pane_idx, cwd, shell_pid = parts
+
+    if sess not in sessions:
+        sessions[sess] = {"windows": {}}
+
+    win_key = win_idx
+    if win_key not in sessions[sess]["windows"]:
+        sessions[sess]["windows"][win_key] = {
+            "name": win_name,
+            "layout": layouts.get(f"{sess}:{win_idx}", ""),
+            "panes": []
+        }
+
+    # Detect if this pane runs claude (child process or pane process itself)
+    is_claude = False
+    session_id = None
+    try:
+        children = subprocess.run(
+            ["pgrep", "-P", shell_pid, "-x", "claude"],
+            capture_output=True, text=True
+        )
+        if children.returncode == 0 and children.stdout.strip():
+            is_claude = True
+        else:
+            proc_name = subprocess.run(
+                ["ps", "-p", shell_pid, "-o", "comm="],
+                capture_output=True, text=True
+            )
+            if proc_name.stdout.strip() == "claude":
+                is_claude = True
+    except Exception:
+        pass
+
+    if is_claude:
+        # Find sessionId: get recent sessions for this project from history
+        proj_sessions = history.get(cwd, {})
+        if proj_sessions:
+            # Track which sessions are already assigned to other panes in this cwd
+            assigned = set()
+            for w in sessions[sess]["windows"].values():
+                for p in w["panes"]:
+                    if p.get("session_id"):
+                        assigned.add(p["session_id"])
+            # Also check other tmux sessions
+            for s in sessions.values():
+                for w in s["windows"].values():
+                    for p in w["panes"]:
+                        if p.get("session_id"):
+                            assigned.add(p["session_id"])
+
+            # Pick most recent unassigned session for this project
+            available = {s: t for s, t in proj_sessions.items() if s not in assigned}
+            if available:
+                session_id = max(available, key=available.get)
+            elif proj_sessions:
+                session_id = max(proj_sessions, key=proj_sessions.get)
+
+    pane_info = {
+        "index": pane_idx,
+        "cwd": cwd,
+        "type": "claude" if is_claude else "shell",
+    }
+    if session_id:
+        pane_info["session_id"] = session_id
+
+    sessions[sess]["windows"][win_key]["panes"].append(pane_info)
+
+# Convert to list format
+manifest = []
+for sess_name, sess_data in sessions.items():
+    windows = []
+    for win_idx in sorted(sess_data["windows"].keys(), key=int):
+        w = sess_data["windows"][win_idx]
+        windows.append({
+            "name": w["name"],
+            "layout": w["layout"],
+            "panes": sorted(w["panes"], key=lambda p: int(p["index"]))
+        })
+    manifest.append({"session": sess_name, "windows": windows})
+
+with open(manifest_path, "w") as f:
+    json.dump(manifest, f, indent=2)
+
+# Summary
+total_panes = sum(len(w["panes"]) for s in manifest for w in s["windows"])
+claude_panes = sum(1 for s in manifest for w in s["windows"] for p in w["panes"] if p["type"] == "claude")
+print(f"  Captured {len(manifest)} sessions, {total_panes} panes ({claude_panes} claude)")
+PYEOF
+                echo -e "${GREEN}  ✓ Manifest saved: $manifest${NC}"
+                ;;
+
+            load)
+                manifest="$HOME/.config/pc/session-manifest.json"
+                if [[ ! -f "$manifest" ]]; then
+                    echo -e "${YELLOW}No manifest found. Run 'pc session save' on the other PC first.${NC}"
+                    exit 1
+                fi
+
+                force=0
+                [[ "${1:-}" == "--force" || "${1:-}" == "-f" ]] && force=1
+
+                # Kill matching sessions if --force
+                if [[ "$force" == "1" ]]; then
+                    echo -e "${CYAN}→ Killing existing matching sessions...${NC}"
+                    for sess_name in $(python3 -c "import json; m=json.load(open('$manifest')); [print(s['session']) for s in m]"); do
+                        tmux kill-session -t "$sess_name" 2>/dev/null && \
+                            echo -e "  killed: $sess_name" || true
+                    done
+                fi
+
+                echo -e "${CYAN}→ Restoring tmux sessions from manifest...${NC}"
+
+                python3 - "$manifest" "$PC_USER" "$LOCAL_USER" <<'PYEOF'
+import subprocess, json, sys, os, time
+
+manifest_path = sys.argv[1]
+remote_user = sys.argv[2]
+local_user = sys.argv[3]
+
+with open(manifest_path) as f:
+    manifest = json.load(f)
+
+def run(cmd):
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+def tmux(*args):
+    return run(["tmux"] + list(args))
+
+    # Query tmux base indices
+base_idx = int(tmux("show-options", "-gv", "base-index").stdout.strip() or "0")
+pane_base = int(tmux("show-options", "-gv", "pane-base-index").stdout.strip() or "0")
+
+created = 0
+skipped = 0
+for sess in manifest:
+    sess_name = sess["session"]
+
+    # Check if session already exists
+    r = tmux("has-session", "-t", sess_name)
+    if r.returncode == 0:
+        skipped += 1
+        print(f"  Session '{sess_name}' already exists, skipping")
+        continue
+
+    for wi, win in enumerate(sess["windows"]):
+        win_num = wi + base_idx
+        for pi, pane in enumerate(win["panes"]):
+            pane_num = pi + pane_base
+            cwd = pane["cwd"]
+            # Only translate if not already local user's path
+            if not cwd.startswith(f"/home/{local_user}") and (
+                cwd == f"/home/{remote_user}" or cwd.startswith(f"/home/{remote_user}/")
+            ):
+                cwd = f"/home/{local_user}" + cwd[len(f"/home/{remote_user}"):]
+
+            if wi == 0 and pi == 0:
+                tmux("new-session", "-d", "-s", sess_name, "-n", win["name"], "-c", cwd)
+            elif pi == 0:
+                tmux("new-window", "-t", f"{sess_name}:", "-n", win["name"], "-c", cwd)
+            else:
+                tmux("split-window", "-t", f"{sess_name}:{win_num}", "-c", cwd)
+
+            target = f"{sess_name}:{win_num}.{pane_num}"
+
+            if pane["type"] == "claude":
+                sid = pane.get("session_id", "")
+                claude_bin = os.path.expanduser("~/.local/bin/claude")
+                if sid:
+                    cmd = f"{claude_bin} --dangerously-skip-permissions --resume {sid}"
+                else:
+                    cmd = f"{claude_bin} --dangerously-skip-permissions -r"
+                tmux("send-keys", "-t", target, cmd, "Enter")
+
+            created += 1
+
+        # Apply layout after all panes in window are created
+        if win.get("layout"):
+            tmux("select-layout", "-t", f"{sess_name}:{win_num}", win["layout"])
+
+msg = f"  Restored {created} panes"
+if skipped:
+    msg += f" ({skipped} sessions already existed, skipped)"
+print(msg)
+PYEOF
+                echo -e "${GREEN}  ✓ tmux sessions restored${NC}"
+                ;;
+
+            show)
+                manifest="$HOME/.config/pc/session-manifest.json"
+                if [[ ! -f "$manifest" ]]; then
+                    echo -e "${YELLOW}No manifest found${NC}"
+                    exit 1
+                fi
+                python3 -c "
+import json, sys
+with open('$manifest') as f:
+    m = json.load(f)
+for s in m:
+    print(f\"\\033[1;36m{s['session']}\\033[0m\")
+    for w in s['windows']:
+        print(f\"  {w['name']}\")
+        for p in w['panes']:
+            sid = p.get('session_id', '')
+            tag = f' [{sid[:8]}...]' if sid else ''
+            print(f\"    [{p['type']}] {p['cwd']}{tag}\")
+"
+                ;;
+
+            push)
+                check_conn
+                manifest="$HOME/.config/pc/session-manifest.json"
+                if [[ ! -f "$manifest" ]]; then
+                    echo -e "${YELLOW}No manifest. Run 'pc session save' first.${NC}"
+                    exit 1
+                fi
+                # Translate paths in manifest and push
+                remote_manifest="/home/${PC_USER}/.config/pc/session-manifest.json"
+                ssh "$PC2" "mkdir -p $(dirname "$remote_manifest")"
+                sed -e "s|/home/${LOCAL_USER}/|/home/${PC_USER}/|g" \
+                    -e "s|/home/${LOCAL_USER}\"|/home/${PC_USER}\"|g" "$manifest" | \
+                    ssh "$PC2" "cat > $remote_manifest"
+                echo -e "${GREEN}  ✓ Manifest pushed to PC2${NC}"
+                ;;
+
+            transfer)
+                check_conn
+                echo -e "${CYAN}→ Full session transfer to PC2...${NC}"
+                # 1. Save current tmux state
+                "$0" session save
+                # 2. Sync claude sessions
+                SYNC_KEEP=0
+                export SYNC_KEEP
+                sync_claude
+                # 3. Push manifest
+                "$0" session push
+                echo -e "${GREEN}  ✓ Session transfer complete. Run 'pc session load' on PC2.${NC}"
+                ;;
+
+            *)
+                echo "Usage: pc session <command>"
+                echo "  save      - capture current tmux layout + claude sessions"
+                echo "  show      - display saved manifest"
+                echo "  push      - push manifest to PC2"
+                echo "  load      - restore tmux sessions from manifest"
+                echo "  transfer  - save + sync claude + push (all-in-one)"
+                ;;
+        esac
+        ;;
+
     # --- Help ---
     *)
         echo "Usage: pc <command>"
@@ -426,6 +738,13 @@ case "$cmd" in
         echo "  backup apply  - restore Claude dialogs from last backup"
         echo "  backup ls     - list backed up files"
         echo "  backup clear  - delete backup"
+        echo ""
+        echo "Session:"
+        echo "  session save      - capture tmux layout + claude sessions"
+        echo "  session show      - display saved manifest"
+        echo "  session push      - push manifest to PC2"
+        echo "  session load      - restore tmux sessions from manifest"
+        echo "  session transfer  - save + sync + push (all-in-one)"
         echo ""
         echo "Manage:"
         echo "  ignore            - ignore current project from sync"
