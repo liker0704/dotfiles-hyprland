@@ -36,7 +36,7 @@ apply_palette() {
     source "$target"
   done
 
-  echo -e "  ${BOLD}Done!${RESET} Restart zellij to apply."
+  echo -e "  ${BOLD}Done!${RESET}"
 }
 
 cmd_sync() {

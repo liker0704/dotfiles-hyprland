@@ -46,14 +46,7 @@ apply_font() {
     echo -e "    ${GREEN}kitty${RESET} → $FONT"
   fi
 
-  # 3. Alacritty
-  local ALACRITTY_CONF="$HOME/.config/alacritty/alacritty.toml"
-  if [[ -f "$ALACRITTY_CONF" ]]; then
-    sed -i 's/^family = ".*"/family = "'"$FONT"'"/' "$ALACRITTY_CONF"
-    echo -e "    ${GREEN}alacritty${RESET}"
-  fi
-
-  # 4. Waybar — update existing CSS if present (heredoc regenerated on next theme sync)
+  # 3. Waybar — update existing CSS if present (heredoc regenerated on next theme sync)
   local WAYBAR_CSS="$HOME/.config/waybar/style-minimal.css"
   if [[ -f "$WAYBAR_CSS" ]]; then
     sed -i 's/font-family: "[^"]*Nerd Font[^"]*"/font-family: "'"$FONT"'"/' "$WAYBAR_CSS"

@@ -65,10 +65,6 @@ fi
 
 # --- Полезные алиасы (псевдонимы) ---
 alias ls='ls --color=auto'
-# Установка unfree пакетов: nix-install spotify
-nix-install() {
-  NIXPKGS_ALLOW_UNFREE=1 nix profile install "nixpkgs#$1" --impure
-}
 # alias ll='ls -l'
 # alias la='ls -A'
 
@@ -96,7 +92,7 @@ alias ge="gemini --yolo"
 
 
 alias nv="nvim"
-alias zj="zellij attach -c main"
+alias tm="tmux attach -t main || tmux new-session -s main"
 
 # Yazi wrapper - changes dir on exit (q), stays in place on Q
 function y() {

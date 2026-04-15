@@ -129,7 +129,7 @@ user_choice=$(printf "%s\n" \
     -theme-str 'entry { placeholder: "🎧 RofiBeats Menu"; }')
 
 case "$user_choice" in
-"Launch Spotify") ~/.nix-profile/bin/spotify & ;;
+"Launch Spotify") spotify & ;;
 "Play from Online Stations") play_online_music ;;
 "Play from Music directory") play_local_music ;;
 "Shuffle Play from Music directory") shuffle_local_music ;;

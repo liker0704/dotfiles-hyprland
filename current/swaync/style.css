@@ -2,17 +2,17 @@
 /* Based on R7 style + Zinc color palette */
 
 /* Static monochrome colors (replacing wallust) */
-@define-color noti-border-color #3f3f46;
-@define-color noti-bg #18181b;
-@define-color noti-bg-alt #27272a;
-@define-color noti-bg-hover #27272a;
-@define-color text-color #e5e7eb;
-@define-color accent #ffffff;
-@define-color text-dim #71717a;
-@define-color urgent #ef4444;
+@define-color noti-border-color #4f5165;
+@define-color noti-bg #1e1e2e;
+@define-color noti-bg-alt #2a2a3b;
+@define-color noti-bg-hover #2a2a3b;
+@define-color text-color #cdd6f4;
+@define-color accent #a6adc8;
+@define-color text-dim #6c7087;
+@define-color urgent #f38ba8;
 
 * {
-    font-family: "JetBrains Mono Nerd Font";
+    font-family: "JetBrainsMono Nerd Font";
     font-weight: bold;
     font-size: 1rem;
 }

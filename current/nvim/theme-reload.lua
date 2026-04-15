@@ -1,0 +1,47 @@
+require('tokyonight').setup({
+  style = "night",
+  transparent = false,
+  terminal_colors = true,
+  styles = {
+    comments = { italic = false },
+    keywords = { italic = false },
+    sidebars = "dark",
+    floats = "dark",
+  },
+  on_colors = function(colors)
+    colors.bg = "#1e1e2e"
+    colors.bg_dark = "#1e1e2e"
+    colors.bg_float = "#1e1e2e"
+    colors.bg_popup = "#1e1e2e"
+    colors.bg_sidebar = "#1e1e2e"
+    colors.bg_statusline = "#2a2a3b"
+    colors.bg_highlight = "#2a2a3b"
+    colors.fg = "#cdd6f4"
+    colors.fg_dark = "#9399b2"
+    colors.fg_gutter = "#3f4053"
+    colors.border = "#3f4053"
+    colors.comment = "#6c7087"
+  end,
+  on_highlights = function(hl, c)
+    hl.Normal = { bg = "#1e1e2e", fg = "#cdd6f4" }
+    hl.NormalNC = { bg = "#1e1e2e", fg = "#cdd6f4" }
+    hl.NormalFloat = { bg = "#1e1e2e" }
+    hl.NormalSB = { bg = "#1e1e2e" }
+    hl.SignColumn = { bg = "#1e1e2e" }
+    hl.LineNr = { fg = "#4f5165", bg = "#1e1e2e" }
+    hl.CursorLineNr = { fg = "#9399b2", bg = "#1e1e2e" }
+    hl.CursorLine = { bg = "#2a2a3b" }
+    hl.Visual = { bg = "#3f4053" }
+    hl.Pmenu = { bg = "#1e1e2e", fg = "#cdd6f4" }
+    hl.PmenuSel = { bg = "#3f4053", fg = "#ffffff" }
+    hl.NeoTreeNormal = { bg = "#1e1e2e" }
+    hl.NeoTreeNormalNC = { bg = "#1e1e2e" }
+    hl.NeoTreeEndOfBuffer = { bg = "#1e1e2e" }
+    hl.TelescopeNormal = { bg = "#1e1e2e" }
+    hl.TelescopeBorder = { bg = "#1e1e2e", fg = "#3f4053" }
+    hl.StatusLine = { bg = "#2a2a3b", fg = "#cdd6f4" }
+    hl.StatusLineNC = { bg = "#1e1e2e", fg = "#6c7087" }
+    hl.EndOfBuffer = { fg = "#1e1e2e" }
+  end,
+})
+vim.cmd('colorscheme tokyonight-night')

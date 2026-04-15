@@ -19,14 +19,14 @@ configuration {
 /*****----- Monochrome Colors -----*****/
 * {
     /* Zinc palette */
-    background:                  #18181b;
-    background-alt:              #27272a;
-    foreground:                  #e5e7eb;
-    selected:                    #ffffff;
-    active:                      #a1a1aa;
-    urgent:                      #ef4444;
-    border-dim:                  #3f3f46;
-    text-dim:                    #71717a;
+    background:                  #1e1e2e;
+    background-alt:              #2a2a3b;
+    foreground:                  #cdd6f4;
+    selected:                    #a6adc8;
+    active:                      #9399b2;
+    urgent:                      #f38ba8;
+    border-dim:                  #4f5165;
+    text-dim:                    #6c7087;
 
     /* Mapped colors */
     border-color:                @border-dim;

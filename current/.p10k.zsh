@@ -160,7 +160,7 @@
   if [[ $POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_CHAR != ' ' ]]; then
     # The color of the filler. You'll probably want to match the color of POWERLEVEL9K_MULTILINE
     # ornaments defined above.
-    typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_FOREGROUND=240
+    typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_FOREGROUND='#4f5165'
     # Start filler from the edge of the screen if there are no left segments on the first line.
     typeset -g POWERLEVEL9K_EMPTY_LINE_LEFT_PROMPT_FIRST_SEGMENT_END_SYMBOL='%{%}'
     # End filler on the edge of the screen if there are no right segments on the first line.
@@ -168,7 +168,7 @@
   fi
 
   # Default background color.
-  typeset -g POWERLEVEL9K_BACKGROUND=236
+  typeset -g POWERLEVEL9K_BACKGROUND='#2a2a3b'
 
   # Separator between same-color segments on the left.
   typeset -g POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR='%244F\u2502'
@@ -223,17 +223,17 @@
 
   ##################################[ dir: current directory ]##################################
   # Default current directory color.
-  typeset -g POWERLEVEL9K_DIR_FOREGROUND=31
+  typeset -g POWERLEVEL9K_DIR_FOREGROUND='#89b4fa'
   # If directory is too long, shorten some of its segments to the shortest possible unique
   # prefix. The shortened directory can be tab-completed to the original.
   typeset -g POWERLEVEL9K_SHORTEN_STRATEGY=truncate_to_unique
   # Replace removed segment suffixes with this symbol.
   typeset -g POWERLEVEL9K_SHORTEN_DELIMITER=
   # Color of the shortened directory segments.
-  typeset -g POWERLEVEL9K_DIR_SHORTENED_FOREGROUND=103
+  typeset -g POWERLEVEL9K_DIR_SHORTENED_FOREGROUND='#6c7087'
   # Color of the anchor directory segments. Anchor segments are never shortened. The first
   # segment is always an anchor.
-  typeset -g POWERLEVEL9K_DIR_ANCHOR_FOREGROUND=39
+  typeset -g POWERLEVEL9K_DIR_ANCHOR_FOREGROUND='#94e2d5'
   # Display anchor directory segments in bold.
   typeset -g POWERLEVEL9K_DIR_ANCHOR_BOLD=true
   # Don't shorten directories that contain any of these files. They are anchors.
@@ -515,9 +515,9 @@
 
   # These settings are used for repositories other than Git or when gitstatusd fails and
   # Powerlevel10k has to fall back to using vcs_info.
-  typeset -g POWERLEVEL9K_VCS_CLEAN_FOREGROUND=76
-  typeset -g POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND=76
-  typeset -g POWERLEVEL9K_VCS_MODIFIED_FOREGROUND=178
+  typeset -g POWERLEVEL9K_VCS_CLEAN_FOREGROUND='#a6e3a1'
+  typeset -g POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND='#a6e3a1'
+  typeset -g POWERLEVEL9K_VCS_MODIFIED_FOREGROUND='#f9e2af'
 
   ##########################[ status: exit code of the last command ]###########################
   # Enable OK_PIPE, ERROR_PIPE and ERROR_SIGNAL status states to allow us to enable, disable and
@@ -1728,7 +1728,7 @@
   typeset -g POWERLEVEL9K_INSTANT_PROMPT=verbose
 
   # Hot reload allows you to change POWERLEVEL9K options after Powerlevel10k has been initialized.
-  # For example, you can type POWERLEVEL9K_BACKGROUND=red and see your prompt turn red. Hot reload
+  # For example, you can type POWERLEVEL9K_BACKGROUND='#2a2a3b'
   # can slow down prompt by 1-2 milliseconds, so it's better to keep it turned off unless you
   # really need it.
   typeset -g POWERLEVEL9K_DISABLE_HOT_RELOAD=true
