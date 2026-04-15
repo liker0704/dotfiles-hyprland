@@ -7,6 +7,7 @@ BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$REPO_DIR/current"
+SHARED_SRC="$SRC/shared"
 BACKUP_BASE="$HOME/.dotfiles-backup"
 
 # --- Flags ---
@@ -14,25 +15,45 @@ DRY_RUN=false
 NO_BACKUP=false
 FORCE=false
 RESTORE=""
+THEME="monochrome"
+OS="arch"
 
-for arg in "$@"; do
-  case "$arg" in
-    --dry-run)    DRY_RUN=true ;;
-    --no-backup)  NO_BACKUP=true ;;
-    --force)      FORCE=true ;;
-    --restore)    RESTORE="latest" ;;
-    --restore=*)  RESTORE="${arg#--restore=}" ;;
-    -h|--help)
-      echo "Usage: sudo ./install.sh [flags]"
-      echo "  --dry-run     Show what would be done"
-      echo "  --no-backup   Skip backup"
-      echo "  --force       Overwrite protected user data (palette, favorites)"
-      echo "  --restore     Restore from latest backup"
-      echo "  --restore=DIR Restore from specific backup"
-      exit 0 ;;
-    *) echo -e "${RED}Unknown flag: $arg${RESET}"; exit 1 ;;
+usage() {
+  cat <<EOF
+Usage: sudo ./install.sh [flags]
+
+Flags:
+  --theme NAME     Theme to install (default: monochrome)
+                   Available: $(ls "$SRC/themes" 2>/dev/null | tr '\n' ' ')
+  --os DISTRO      Target distro: arch | debian (default: arch)
+                   (debian placeholder — only arch is supported right now)
+  --dry-run        Show what would be done
+  --no-backup      Skip backup
+  --force          Overwrite protected user data (palette, favorites)
+  --restore        Restore from latest backup
+  --restore=DIR    Restore from specific backup
+  -h, --help       This help
+EOF
+}
+
+# --- Flag parsing ---
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --theme)      THEME="$2"; shift 2 ;;
+    --theme=*)    THEME="${1#--theme=}"; shift ;;
+    --os)         OS="$2"; shift 2 ;;
+    --os=*)       OS="${1#--os=}"; shift ;;
+    --dry-run)    DRY_RUN=true; shift ;;
+    --no-backup)  NO_BACKUP=true; shift ;;
+    --force)      FORCE=true; shift ;;
+    --restore)    RESTORE="latest"; shift ;;
+    --restore=*)  RESTORE="${1#--restore=}"; shift ;;
+    -h|--help)    usage; exit 0 ;;
+    *) echo -e "${RED}Unknown flag: $1${RESET}"; usage; exit 1 ;;
   esac
 done
+
+THEME_SRC="$SRC/themes/$THEME"
 
 # --- Detect real user (script runs with sudo) ---
 if [[ -n "${SUDO_USER:-}" ]]; then
@@ -43,8 +64,6 @@ else
   REAL_HOME="$HOME"
 fi
 
-# Update paths for real user
-SRC="$REPO_DIR/current"
 BACKUP_BASE="$REAL_HOME/.dotfiles-backup"
 
 # --- Restore mode ---
@@ -62,8 +81,25 @@ if [[ -n "$RESTORE" ]]; then
   exit 0
 fi
 
+# --- Validate theme ---
+if [[ ! -d "$THEME_SRC" ]]; then
+  echo -e "${RED}Theme '$THEME' not found in $SRC/themes/${RESET}"
+  echo "Available: $(ls "$SRC/themes" 2>/dev/null | tr '\n' ' ')"
+  exit 1
+fi
+
+# --- Validate OS ---
+case "$OS" in
+  arch) ;;
+  debian) echo -e "${YELLOW}Note: --os debian is a placeholder; Debian packaging is not yet implemented. Dotfiles will still copy.${RESET}" ;;
+  *) echo -e "${RED}Unknown --os: $OS (expected: arch | debian)${RESET}"; exit 1 ;;
+esac
+
 # --- Mappings ---
-# dir:src → dst
+# src_under_shared_or_theme:dst
+#
+# DIR_MAPS are copied from BOTH shared/ (if present) and themes/$THEME/ (if present).
+# Theme overlays shared — shared copies first, theme copies on top.
 DIR_MAPS=(
   "hypr:$REAL_HOME/.config/hypr"
   "kitty:$REAL_HOME/.config/kitty"
@@ -71,22 +107,22 @@ DIR_MAPS=(
   "rofi:$REAL_HOME/.config/rofi"
   "swaync:$REAL_HOME/.config/swaync"
   "waybar:$REAL_HOME/.config/waybar"
-  "alacritty:$REAL_HOME/.config/alacritty"
   "fontconfig:$REAL_HOME/.config/fontconfig"
   "tmux:$REAL_HOME/.config/tmux"
   "theme:$REAL_HOME/.config/theme"
 )
 
-# file:src → dst
+# file:dst (shared only; themes typically use DIR_MAPS)
 FILE_MAPS=(
   "scripts/theme:$REAL_HOME/.local/bin/theme"
   "scripts/mpvpaper-stop:$REAL_HOME/.local/bin/mpvpaper-stop"
   "scripts/pc:$REAL_HOME/.local/bin/pc"
+  "scripts/kitty-raw:$REAL_HOME/.local/bin/kitty-raw"
   ".zshrc:$REAL_HOME/.zshrc"
   ".p10k.zsh:$REAL_HOME/.p10k.zsh"
 )
 
-# special dir mapping
+# special dir mapping (shared only)
 SPECIAL_DIR_MAPS=(
   "scripts/theme-modules:$REAL_HOME/.local/share/theme"
 )
@@ -122,22 +158,60 @@ log_ok()   { echo -e "  ${GREEN}✓${RESET} $1"; }
 log_skip() { echo -e "  ${YELLOW}~${RESET} $1 ${DIM}(protected)${RESET}"; }
 log_dry()  { echo -e "  ${DIM}→${RESET} $1"; }
 
+# Copy a directory from source root.
+# Respects PROTECTED paths (skips files that already exist and are protected).
+copy_dir() {
+  local abs_src="$1" abs_dst="$2" label="$3"
+  [[ ! -d "$abs_src" ]] && return
+  mkdir -p "$abs_dst"
+  # Walk each top-level entry; recurse with cp -a except for protected files
+  local had_protected=0
+  while IFS= read -r -d '' f; do
+    local rel="${f#$abs_src/}"
+    local target="$abs_dst/$rel"
+    if is_protected "$target" && [[ -f "$target" ]]; then
+      log_skip "${label}/${rel}"
+      had_protected=1
+    else
+      mkdir -p "$(dirname "$target")"
+      cp -a "$f" "$target"
+    fi
+  done < <(find "$abs_src" -mindepth 1 -maxdepth 1 -print0)
+  (( had_protected == 0 )) && log_ok "${label}/"
+  return 0
+}
+
+copy_file() {
+  local abs_src="$1" abs_dst="$2" label="$3"
+  [[ ! -f "$abs_src" ]] && return
+  mkdir -p "$(dirname "$abs_dst")"
+  cp -a "$abs_src" "$abs_dst"
+  log_ok "${label}"
+}
+
 # --- Dry run ---
 if $DRY_RUN; then
-  echo -e "${BOLD}Dry run — nothing will be changed${RESET}\n"
-  echo -e "${BOLD}Directories:${RESET}"
+  echo -e "${BOLD}Dry run — nothing will be changed${RESET}"
+  echo -e "Theme: ${GREEN}${THEME}${RESET}  OS: ${GREEN}${OS}${RESET}\n"
+  echo -e "${BOLD}Shared dirs ($SHARED_SRC/ → ~/.config/...):${RESET}"
   for map in "${DIR_MAPS[@]}"; do
     src="${map%%:*}"; dst="${map#*:}"
-    log_dry "$SRC/$src/ → $dst/"
+    [[ -d "$SHARED_SRC/$src" ]] && log_dry "$src/ → $dst/"
   done
+  echo -e "\n${BOLD}Theme dirs ($THEME_SRC/ → ~/.config/...):${RESET}"
+  for map in "${DIR_MAPS[@]}"; do
+    src="${map%%:*}"; dst="${map#*:}"
+    [[ -d "$THEME_SRC/$src" ]] && log_dry "$src/ → $dst/ ${DIM}(overlays shared)${RESET}"
+  done
+  echo -e "\n${BOLD}Special dirs:${RESET}"
   for map in "${SPECIAL_DIR_MAPS[@]}"; do
     src="${map%%:*}"; dst="${map#*:}"
-    log_dry "$SRC/$src/ → $dst/"
+    [[ -d "$SHARED_SRC/$src" ]] && log_dry "$src/ → $dst/"
   done
   echo -e "\n${BOLD}Files:${RESET}"
   for map in "${FILE_MAPS[@]}"; do
     src="${map%%:*}"; dst="${map#*:}"
-    log_dry "$SRC/$src → $dst"
+    [[ -f "$SHARED_SRC/$src" ]] && log_dry "$src → $dst"
   done
   echo -e "\n${BOLD}Protected (won't overwrite if exist):${RESET}"
   for p in "${PROTECTED[@]}"; do
@@ -146,9 +220,13 @@ if $DRY_RUN; then
   echo -e "\n${BOLD}Symlink:${RESET}"
   log_dry "/usr/local/bin/theme → $REAL_HOME/.local/bin/theme"
   echo -e "\n${BOLD}Post-install:${RESET}"
+  log_dry "mark active theme: ~/.config/dotfiles-theme = $THEME"
+  log_dry "mark os: ~/.config/dotfiles-os = $OS"
   log_dry "theme sync"
   exit 0
 fi
+
+echo -e "${BOLD}Theme:${RESET} ${GREEN}$THEME${RESET}  ${BOLD}OS:${RESET} ${GREEN}$OS${RESET}\n"
 
 # --- Backup ---
 if ! $NO_BACKUP; then
@@ -171,54 +249,43 @@ if ! $NO_BACKUP; then
   echo ""
 fi
 
-# --- Install directories ---
-echo -e "${BOLD}Installing configs...${RESET}"
-
+# --- Install shared dirs ---
+echo -e "${BOLD}Installing shared configs...${RESET}"
 for map in "${DIR_MAPS[@]}"; do
   src="${map%%:*}"; dst="${map#*:}"
-  [[ ! -d "$SRC/$src" ]] && continue
-  mkdir -p "$dst"
-
-  # For theme dir, handle protected files
-  if [[ "$src" == "theme" ]]; then
-    # Copy non-protected files
-    for f in "$SRC/$src"/*; do
-      fname=$(basename "$f")
-      target="$dst/$fname"
-      if is_protected "$target" && [[ -f "$target" ]]; then
-        log_skip "$src/$fname"
-      else
-        cp -a "$f" "$target"
-      fi
-    done
-    log_ok "$src/"
-  else
-    cp -a "$SRC/$src"/. "$dst/"
-    log_ok "$src/"
-  fi
+  copy_dir "$SHARED_SRC/$src" "$dst" "shared/$src"
 done
 
-# Special dir mappings
+# --- Overlay theme dirs ---
+echo ""
+echo -e "${BOLD}Overlaying theme '$THEME'...${RESET}"
+for map in "${DIR_MAPS[@]}"; do
+  src="${map%%:*}"; dst="${map#*:}"
+  copy_dir "$THEME_SRC/$src" "$dst" "themes/$THEME/$src"
+done
+
+# Special dir mappings (shared only)
+echo ""
 for map in "${SPECIAL_DIR_MAPS[@]}"; do
   src="${map%%:*}"; dst="${map#*:}"
-  [[ ! -d "$SRC/$src" ]] && continue
+  [[ ! -d "$SHARED_SRC/$src" ]] && continue
   mkdir -p "$dst"
-  cp -a "$SRC/$src"/. "$dst/"
-  log_ok "$src/ → ${dst#$REAL_HOME/}"
+  cp -a "$SHARED_SRC/$src"/. "$dst/"
+  log_ok "shared/$src/ → ${dst#$REAL_HOME/}"
 done
 
-# --- Install files ---
+# --- Install files (shared only) ---
 echo ""
 for map in "${FILE_MAPS[@]}"; do
   src="${map%%:*}"; dst="${map#*:}"
-  [[ ! -f "$SRC/$src" ]] && continue
-  mkdir -p "$(dirname "$dst")"
-  cp -a "$SRC/$src" "$dst"
-  log_ok "${src} → ${dst#$REAL_HOME/}"
+  copy_file "$SHARED_SRC/$src" "$dst" "shared/${src} → ${dst#$REAL_HOME/}"
 done
 
 # Make scripts executable
-chmod +x "$REAL_HOME/.local/bin/theme" "$REAL_HOME/.local/bin/mpvpaper-stop" "$REAL_HOME/.local/bin/pc" 2>/dev/null
+chmod +x "$REAL_HOME/.local/bin/theme" \
+         "$REAL_HOME/.local/bin/mpvpaper-stop" \
+         "$REAL_HOME/.local/bin/pc" \
+         "$REAL_HOME/.local/bin/kitty-raw" 2>/dev/null || true
 
 # --- Fix ownership (running as sudo) ---
 chown -R "$REAL_USER:$REAL_USER" \
@@ -228,6 +295,11 @@ chown -R "$REAL_USER:$REAL_USER" \
   "$REAL_HOME/.zshrc" \
   "$REAL_HOME/.p10k.zsh" \
   2>/dev/null || true
+
+# --- Meta markers ---
+echo "$THEME" | sudo -u "$REAL_USER" tee "$REAL_HOME/.config/dotfiles-theme" >/dev/null
+echo "$OS" | sudo -u "$REAL_USER" tee "$REAL_HOME/.config/dotfiles-os" >/dev/null
+log_ok "marked theme: $THEME, os: $OS"
 
 # --- tmux plugins ---
 TMUX_PLUGINS="$REAL_HOME/.tmux/plugins"
@@ -244,7 +316,7 @@ for plugin in "${!TMUX_REPOS[@]}"; do
   fi
 done
 
-# --- Symlink for rofi ---
+# --- Symlink for theme CLI ---
 echo ""
 ln -sf "$REAL_HOME/.local/bin/theme" /usr/local/bin/theme
 log_ok "/usr/local/bin/theme → ~/.local/bin/theme"
@@ -255,5 +327,5 @@ echo -e "${BOLD}Running theme sync...${RESET}"
 sudo -u "$REAL_USER" "$REAL_HOME/.local/bin/theme" sync 2>&1 || true
 
 echo ""
-echo -e "${GREEN}${BOLD}Done!${RESET}"
+echo -e "${GREEN}${BOLD}Done!${RESET}  ${DIM}(theme: $THEME, os: $OS)${RESET}"
 [[ -n "${BACKUP_DIR:-}" ]] && echo -e "${DIM}Backup: $BACKUP_DIR${RESET}"
