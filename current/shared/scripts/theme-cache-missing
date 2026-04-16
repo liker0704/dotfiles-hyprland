@@ -6,15 +6,29 @@
 CACHE_DIR="$HOME/.cache/wallpaper-palettes"
 WALL_DIR="$HOME/Pictures/wallpapers"
 
-mkdir -p "$CACHE_DIR"
+# Temporary wallust config: only generates palette.conf template
+TEMP_WALLUST_DIR=$(mktemp -d)
+TEMP_WALLUST_CONF="$TEMP_WALLUST_DIR/wallust.toml"
 
-# Save current palette
-cp "$HOME/.config/theme/palette.conf" /tmp/palette-startup-backup.conf 2>/dev/null
+cp "$HOME/.config/wallust/templates/palette.conf" "$TEMP_WALLUST_DIR/"
+
+cat > "$TEMP_WALLUST_CONF" << 'TOMLEOF'
+backend = "kmeans"
+color_space = "labmixed"
+palette = "dark16"
+threshold = 11
+
+[templates]
+palette.template = "palette.conf"
+TOMLEOF
+printf 'palette.target = "%s/out-palette.conf"\n' "$TEMP_WALLUST_DIR" >> "$TEMP_WALLUST_CONF"
+
+mkdir -p "$CACHE_DIR"
 
 missing=0
 cached=0
 
-find "$WALL_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" \) | while read -r img; do
+while read -r img; do
     hash=$(echo "$img" | md5sum | cut -c1-12)
     cache_file="$CACHE_DIR/${hash}.conf"
 
@@ -24,7 +38,13 @@ find "$WALL_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o 
     fi
 
     missing=$((missing + 1))
-    wallust run "$img" 2>/dev/null
+
+    wallust run -s -C "$TEMP_WALLUST_CONF" --templates-dir "$TEMP_WALLUST_DIR" "$img" 2>/dev/null
+
+    GENERATED="$TEMP_WALLUST_DIR/out-palette.conf"
+    if [[ ! -f "$GENERATED" ]]; then
+        continue
+    fi
 
     # Fix derived colors + accent
     python3 << PYEOF
@@ -33,7 +53,7 @@ import colorsys, re, os
 def blend(c1, c2, ratio):
     return ''.join(f'{int(int(c1[i:i+2],16)*(1-ratio)+int(c2[i:i+2],16)*ratio):02x}' for i in (0,2,4))
 
-p = os.path.expanduser('~/.config/theme/palette.conf')
+p = '$GENERATED'
 palette = {}
 for line in open(p):
     m = re.match(r'^(\w+)=([0-9A-Fa-f]{6})\s*$', line.strip())
@@ -63,20 +83,19 @@ if scored:
 
 with open(p, 'w') as f:
     f.write('# Terminal color palette\n# Theme: Wallpaper (wallust)\n\n')
+    f.write('# Base colors\n')
     for k in ['bg','bg_light','bg_highlight','fg','fg_dim','fg_muted','border']:
         f.write(f'{k}={palette.get(k,"000000")}\n')
-    f.write('\n')
+    f.write('\n# Terminal 16 colors\n')
     for pair in [('black','bright_black'),('red','bright_red'),('green','bright_green'),('yellow','bright_yellow'),('blue','bright_blue'),('magenta','bright_magenta'),('cyan','bright_cyan'),('white','bright_white')]:
         for k in pair:
             f.write(f'{k}={palette.get(k,"000000")}\n')
-    f.write(f'\naccent={palette.get("accent","7aa2f7")}\naccent_secondary={palette.get("accent_secondary","bb9af7")}\n')
+    f.write(f'\n# Accent\naccent={palette.get("accent","7aa2f7")}\naccent_secondary={palette.get("accent_secondary","bb9af7")}\n')
     f.write(f'cursor={palette.get("cursor", fg)}\nurl={palette.get("url", palette.get("blue","7aa2f7"))}\n')
     f.write(f'\nfont=JetBrainsMono Nerd Font\n')
 PYEOF
 
-    cp "$HOME/.config/theme/palette.conf" "$cache_file"
-done
+    cp "$GENERATED" "$cache_file"
+done < <(find "$WALL_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" \))
 
-# Restore original palette
-cp /tmp/palette-startup-backup.conf "$HOME/.config/theme/palette.conf" 2>/dev/null
-rm -f /tmp/palette-startup-backup.conf
+rm -rf "$TEMP_WALLUST_DIR"

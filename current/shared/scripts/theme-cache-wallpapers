@@ -5,12 +5,29 @@
 
 CACHE_DIR="$HOME/.cache/wallpaper-palettes"
 WALL_DIR="$HOME/Pictures/wallpapers"
-TEMP_PALETTE="/tmp/wallust-palette-cache.conf"
+PALETTE="$HOME/.config/theme/palette.conf"
+
+# Temporary wallust config: only generates palette.conf template
+TEMP_WALLUST_DIR=$(mktemp -d)
+TEMP_WALLUST_CONF="$TEMP_WALLUST_DIR/wallust.toml"
+
+# Copy template file so wallust can find it
+cp -r "$HOME/.config/wallust/templates/palette.conf" "$TEMP_WALLUST_DIR/"
+
+# Create minimal wallust config — palette template only, no other targets
+cat > "$TEMP_WALLUST_CONF" << 'TOMLEOF'
+backend = "kmeans"
+color_space = "labmixed"
+palette = "dark16"
+threshold = 11
+
+[templates]
+palette.template = "palette.conf"
+TOMLEOF
+# Target is set to our temp file, not the real palette.conf
+printf 'palette.target = "%s/out-palette.conf"\n' "$TEMP_WALLUST_DIR" >> "$TEMP_WALLUST_CONF"
 
 mkdir -p "$CACHE_DIR"
-
-# Save current palette so we can restore after
-cp "$HOME/.config/theme/palette.conf" /tmp/palette-backup.conf 2>/dev/null
 
 count=0
 skipped=0
@@ -18,7 +35,8 @@ total=$(find "$WALL_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.
 
 echo "Pre-caching palettes for $total wallpapers..."
 
-find "$WALL_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" \) | while read -r img; do
+# Use process substitution instead of pipe to avoid subshell
+while read -r img; do
     hash=$(echo "$img" | md5sum | cut -c1-12)
     cache_file="$CACHE_DIR/${hash}.conf"
     count=$((count + 1))
@@ -30,17 +48,40 @@ find "$WALL_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o 
 
     echo "[$count/$total] $(basename "$img")"
 
-    # Run wallust (writes to ~/.config/theme/palette.conf via template)
-    wallust run "$img" 2>/dev/null
+    # Run wallust with:
+    #   -s = skip terminal sequences (don't change current terminal colors)
+    #   -C = use temp config (only palette template, no kitty/hypr/rofi/waybar)
+    #   --templates-dir = look for templates in our temp dir
+    wallust run -s -C "$TEMP_WALLUST_CONF" --templates-dir "$TEMP_WALLUST_DIR" "$img" 2>/dev/null
 
-    # Run accent selection on the generated palette
-    python3 -c "
-import colorsys, re
+    GENERATED="$TEMP_WALLUST_DIR/out-palette.conf"
+    if [[ ! -f "$GENERATED" ]]; then
+        echo "  WARN: wallust produced no output, skipping"
+        continue
+    fi
+
+    # Fix derived colors with blend() + auto-accent selection
+    python3 << PYEOF
+import colorsys, re, os
+
+def blend(c1, c2, ratio):
+    return ''.join(f'{int(int(c1[i:i+2],16)*(1-ratio)+int(c2[i:i+2],16)*ratio):02x}' for i in (0,2,4))
+
+p = '$GENERATED'
 palette = {}
-for line in open('$HOME/.config/theme/palette.conf'):
-    m = re.match(r'^(\w+)=([0-9A-Fa-f]{6})\s*\$', line.strip())
+for line in open(p):
+    m = re.match(r'^(\w+)=([0-9A-Fa-f]{6})\s*$', line.strip())
     if m: palette[m.group(1)] = m.group(2)
-bg_l = colorsys.rgb_to_hls(*[int(palette.get('bg','000000')[i:i+2],16)/255 for i in (0,2,4)])[1]
+
+bg = palette.get('bg', '000000')
+fg = palette.get('fg', 'ffffff')
+palette['bg_light'] = blend(bg, fg, 0.07)
+palette['bg_highlight'] = blend(bg, fg, 0.19)
+palette['fg_dim'] = blend(fg, bg, 0.33)
+palette['fg_muted'] = blend(fg, bg, 0.55)
+palette['border'] = blend(bg, fg, 0.28)
+
+bg_l = colorsys.rgb_to_hls(*[int(bg[i:i+2],16)/255 for i in (0,2,4)])[1]
 candidates = [(k, palette[k]) for k in ['red','green','yellow','blue','magenta','cyan','bright_red','bright_green','bright_yellow','bright_blue','bright_magenta','bright_cyan'] if k in palette]
 scored = []
 for name, h in candidates:
@@ -51,24 +92,31 @@ for name, h in candidates:
     scored.append((s * 2 + gap * 0.5, h, name))
 scored.sort(reverse=True)
 if scored:
-    p = '$HOME/.config/theme/palette.conf'
-    lines = open(p).readlines()
-    with open(p, 'w') as f:
-        for line in lines:
-            if not line.startswith('accent'): f.write(line)
-        f.write('accent=' + scored[0][1] + '\n')
-        f.write('accent_secondary=' + (scored[1][1] if len(scored)>1 else scored[0][1]) + '\n')
-" 2>/dev/null
+    palette['accent'] = scored[0][1]
+    palette['accent_secondary'] = scored[1][1] if len(scored) > 1 else scored[0][1]
 
-    # Save to cache (NOT current theme)
-    cp "$HOME/.config/theme/palette.conf" "$cache_file"
-done
+with open(p, 'w') as f:
+    f.write('# Terminal color palette\n# Theme: Wallpaper (wallust)\n\n')
+    f.write('# Base colors\n')
+    for k in ['bg','bg_light','bg_highlight','fg','fg_dim','fg_muted','border']:
+        f.write(f'{k}={palette.get(k,"000000")}\n')
+    f.write('\n# Terminal 16 colors\n')
+    for pair in [('black','bright_black'),('red','bright_red'),('green','bright_green'),('yellow','bright_yellow'),('blue','bright_blue'),('magenta','bright_magenta'),('cyan','bright_cyan'),('white','bright_white')]:
+        for k in pair:
+            f.write(f'{k}={palette.get(k,"000000")}\n')
+    f.write(f'\n# Accent\naccent={palette.get("accent","7aa2f7")}\naccent_secondary={palette.get("accent_secondary","bb9af7")}\n')
+    f.write(f'cursor={palette.get("cursor", fg)}\nurl={palette.get("url", palette.get("blue","7aa2f7"))}\n')
+    f.write(f'\n# Font\nfont=JetBrainsMono Nerd Font\n')
+PYEOF
 
-# Restore original palette
-cp /tmp/palette-backup.conf "$HOME/.config/theme/palette.conf" 2>/dev/null
-rm -f /tmp/palette-backup.conf
+    # Save to cache
+    cp "$GENERATED" "$cache_file"
+done < <(find "$WALL_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" \))
+
+# Cleanup temp dir
+rm -rf "$TEMP_WALLUST_DIR"
 
 echo ""
 echo "Done! Cached palettes in $CACHE_DIR"
-echo "Skipped $skipped already cached."
+echo "Skipped $skipped already cached, processed $((count - skipped))."
 echo "Current theme unchanged."
