@@ -1,88 +1,126 @@
 # Hyprland Dotfiles
 
-Monochrome Hyprland setup with minimal UI and unified theming.
+Multi-theme Hyprland setup with unified theming. Ships two themes: **monochrome** (flat minimal) and **aurora** (glassy, rounded, animated).
 
 ## Structure
 
 ```
 current/
-├── hypr/              # Hyprland WM config
-├── kitty/             # Kitty terminal
-├── nvim/              # Neovim (LazyVim)
-├── rofi/              # Rofi launcher
-├── swaync/            # SwayNC notifications
-├── waybar/            # Waybar (minimal monochrome)
-├── alacritty/         # Alacritty terminal
-├── fontconfig/        # Font config
-├── zellij/            # Zellij multiplexer
-├── theme/             # Palette + custom themes
-├── scripts/
-│   ├── theme          # Theme CLI (dispatcher)
-│   ├── theme-modules/ # Modular theme system
-│   │   ├── lib/       #   Shared utilities
-│   │   ├── commands/  #   15 command modules
-│   │   └── targets/   #   12 sync targets (plugin architecture)
-│   └── mpvpaper-stop  # Live wallpaper manager
-├── .zshrc
-└── .p10k.zsh
+├── shared/                # Theme-invariant configs
+│   ├── hypr/              # Hyprland WM config (binds, rules, scripts)
+│   ├── kitty/             # Kitty terminal (layout, actions)
+│   ├── nvim/              # Neovim (LazyVim)
+│   ├── rofi/              # Rofi launcher configs
+│   ├── swaync/            # SwayNC structure (config.json)
+│   ├── waybar/            # Waybar catalogs (Modules, configs, style presets)
+│   ├── fontconfig/        # Font config
+│   ├── theme/             # Shared theme data (favorites, gogh-themes)
+│   ├── tmux/              # Tmux bindings
+│   ├── scripts/
+│   │   ├── theme          # Theme CLI (dispatcher)
+│   │   ├── theme-modules/ # Modular theme system
+│   │   │   ├── lib/       #   Shared utilities
+│   │   │   ├── commands/  #   15 command modules
+│   │   │   └── targets/   #   13 sync targets (plugin architecture)
+│   │   ├── pc             # Multi-PC sync/SSH tool
+│   │   └── kitty-raw      # No-tmux terminal helper
+│   ├── .zshrc
+│   └── .p10k.zsh
+│
+└── themes/
+    ├── monochrome/        # Flat, minimal, no blur/rounding
+    │   ├── waybar/        #   Flat bar CSS
+    │   ├── kitty/         #   Color scheme
+    │   ├── tmux/          #   Tmux colors
+    │   ├── swaync/        #   Notification CSS
+    │   ├── rofi/          #   Launcher theme
+    │   ├── hypr/          #   Decorations (rounding=0, no blur)
+    │   └── theme/         #   Palette + telegram theme
+    │
+    └── aurora/            # Glassy, rounded, animated
+        ├── waybar/        #   Pill modules, glassmorphism
+        ├── kitty/         #   Aurora color scheme
+        ├── tmux/          #   Aurora tmux colors
+        ├── swaync/        #   Slide-fade notifications
+        ├── rofi/          #   Rounded launcher
+        ├── hypr/          #   Decorations (rounding=12, blur, shadows, popin)
+        ├── theme/         #   Aurora palette + matugen config
+        ├── matugen/       #   Matugen templates (if engine=matugen)
+        └── meta.json      #   Theme metadata
 ```
 
 ## Stack
 
 - **WM**: Hyprland
-- **Bar**: Waybar (minimal monochrome)
-- **Terminal**: Kitty + Zellij + Alacritty
+- **Bar**: Waybar
+- **Terminal**: Kitty + Tmux
 - **Shell**: Zsh + Oh-My-Zsh + Powerlevel10k
 - **Launcher**: Rofi
 - **Notifications**: SwayNC
 - **Editor**: Neovim (LazyVim)
-- **Browser**: Zen Browser (Flatpak)
-- **Messenger**: Telegram Desktop (Flatpak)
+- **Browser**: Zen Browser
 - **Wallpapers**: swww (static) + mpvpaper (live video)
-- **Theming**: `theme` — unified palette across all apps
+- **Theming**: `theme` CLI — unified palette across all apps
 
 ## Install
 
 ```bash
+# Default (monochrome theme, arch)
 sudo ./install.sh
+
+# Pick a theme
+sudo ./install.sh --theme aurora
+
+# Specify OS (debian placeholder for future)
+sudo ./install.sh --theme aurora --os arch
+
+# Preview
+sudo ./install.sh --theme aurora --dry-run
 ```
 
-Auto-backs up existing configs to `~/.dotfiles-backup/`, copies everything, creates `/usr/local/bin/theme` symlink, runs `theme sync`.
+### Flags
 
-```bash
-sudo ./install.sh --dry-run    # preview without changes
-sudo ./install.sh --no-backup  # skip backup (reinstall)
-sudo ./install.sh --force      # overwrite user data (palette, favorites)
-sudo ./install.sh --restore    # rollback from latest backup
-```
+| Flag | Description |
+|------|-------------|
+| `--theme NAME` | Theme to install (default: monochrome) |
+| `--os DISTRO` | Target distro: arch / debian (default: arch) |
+| `--dry-run` | Preview without changes |
+| `--no-backup` | Skip backup |
+| `--force` | Overwrite protected user data |
+| `--restore` | Rollback from latest backup |
+
+### How it works
+
+1. Backs up existing configs to `~/.dotfiles-backup/`
+2. Copies `shared/` configs (theme-invariant)
+3. Overlays `themes/<name>/` on top (theme-specific CSS/palette/decorations)
+4. Creates `/usr/local/bin/theme` symlink
+5. Runs `theme sync` to apply palette to all apps
+6. Writes `~/.config/dotfiles-theme` and `~/.config/dotfiles-os` markers
 
 Protected files (won't overwrite unless `--force`):
-- `~/.config/theme/palette.conf` — current theme
-- `~/.config/theme/favorites` — favorite themes
-- `~/.config/theme/custom-themes.json` — custom themes
-- `~/.config/theme/config` — skip targets config
+- `~/.config/theme/palette.conf`, `favorites`, `custom-themes.json`, `config`, `gogh-themes.json`
 
-### Post-install
+### Aurora prerequisites
 
 ```bash
-# Build mpvpaper from source (nix version breaks with NVIDIA)
-sudo apt install libmpv-dev libwayland-dev libegl-dev wayland-protocols ninja-build meson
-git clone https://github.com/GhostNaN/mpvpaper.git /tmp/mpvpaper
-cd /tmp/mpvpaper && meson setup build && ninja -C build
-cp build/mpvpaper build/mpvpaper-holder ~/.local/bin/
-
-# Create video wallpapers directory
-mkdir -p ~/Videos/wallpapers
+paru -S matugen  # optional: dynamic palette from wallpaper
 ```
 
-## Theme
+## Themes
 
-Unified theming across 12 apps from a single palette file (`~/.config/theme/palette.conf`).
+### Monochrome
+Flat, minimal, no blur or rounding. Subtle white borders, disabled animations.
+
+### Aurora
+Glassy pill-shaped waybar modules, gradient accents, rounded corners (12px), Gaussian blur, shadow, popin window animation. Slide-fade swaync notifications. Supports matugen for automatic palette extraction from wallpaper.
+
+## Theme CLI
+
+Unified theming across 13 apps from a single palette file.
 
 ### Sync targets
-kitty, neovim, zellij, alacritty, hyprland, waybar, rofi, swaync, powerlevel10k, telegram, claude code, dconf (GTK/Qt)
-
-Adding a new target = creating one file in `targets/`.
+kitty, neovim, hyprland, waybar, rofi, swaync, powerlevel10k, telegram, claude code, opencode, dconf, tmux, matugen
 
 ### Commands
 
@@ -90,66 +128,49 @@ Adding a new target = creating one file in `targets/`.
 theme                           # current theme + help
 theme set "Tokyo Night"         # set from 364+ Gogh themes
 theme search gruvbox            # fuzzy search with color preview
-theme search cat --dark --good  # dark themes with quality filter
-theme list dark                 # list dark themes
-theme generate                  # random HSLuv palette
-theme generate light --wild     # wild light palette
 theme random                    # random quality theme + font
 theme sync                      # apply palette to all configs
 theme font set "Iosevka"        # set monospace Nerd Font everywhere
-theme font random               # random Nerd Font
 theme fav add                   # add current to favorites
-theme fav next / prev           # cycle favorites
-theme import file.conf          # import kitty/Xresources theme
 theme save "My Theme"           # save current as custom
-theme current                   # show current palette
-theme backup                    # backup all configs
-```
-
-### Skip targets
-
-Create `~/.config/theme/config`:
-```
-SKIP_TARGETS=telegram claude
 ```
 
 ## Key Bindings
 
-### Hyprland
 | Action | Keys |
 |--------|------|
+| Terminal | `Super+Enter` |
+| Terminal (no tmux) | `Super+Shift+Enter` |
+| Launcher | `Super+D` |
+| Browser | `Super+B` |
+| File manager | `Super+E` |
 | Navigate | `Super+H/J/K/L` |
 | Move window | `Super+Shift+H/J/K/L` |
+| Resize | `Super+Ctrl+H/J/K/L` |
+| Swap | `Super+Alt+H/J/K/L` |
 | Workspaces | `Super+1-9` |
-| Launcher | `Super+D` |
 | Wallpaper select | `Super+W` |
-| Live wallpaper | `Super+Alt+W` |
-| Random wallpaper | `Ctrl+Alt+W` |
-
-### Zellij
-| Action | Keys |
-|--------|------|
-| New pane | `Alt+N` |
-| Navigate | `Alt+H/J/K/L` |
-| New tab | `Alt+T` |
-| Switch tabs | `Alt+1/2/3` |
-| Close pane | `Alt+X` |
-| Fullscreen | `Alt+F` |
-
-## Live Wallpapers
-
-Video wallpapers via mpvpaper with rofi picker and auto-pause.
-
-- `Super+Alt+W` — rofi menu to select video
-- Videos: `~/Videos/wallpapers/` (mp4/webm/mkv)
-- Wallpaper Engine (Steam) videos work via symlinks
-- Auto-pauses when windows cover desktop
+| Lock screen | `Super+Shift+P` |
+| Power menu | `Ctrl+Alt+P` |
+| Dictation | `Super+R` |
+| Focus mode | `Super+Escape` |
 
 ## Dependencies
 
+### Arch (CachyOS)
+
 ```
-hyprland waybar rofi swaync zellij kitty neovim alacritty
-swww mpvpaper jq bc ffmpeg curl python3
+hyprland waybar rofi swaync tmux kitty neovim
+swww jq bc ffmpeg curl python3
 zsh oh-my-zsh powerlevel10k
-JetBrainsMono Nerd Font
+noto-fonts noto-fonts-emoji ttf-jetbrains-mono-nerd
+nautilus loupe wlogout hyprlock hypridle
+```
+
+### Optional
+
+```
+matugen        # dynamic wallpaper-based palette (aurora theme)
+voxtype        # push-to-talk voice dictation
+mpvpaper       # live video wallpapers
 ```
