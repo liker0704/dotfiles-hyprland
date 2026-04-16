@@ -61,53 +61,7 @@ while read -r img; do
     fi
 
     # Fix derived colors with blend() + auto-accent selection
-    python3 << PYEOF
-import colorsys, re, os
-
-def blend(c1, c2, ratio):
-    return ''.join(f'{int(int(c1[i:i+2],16)*(1-ratio)+int(c2[i:i+2],16)*ratio):02x}' for i in (0,2,4))
-
-p = '$GENERATED'
-palette = {}
-for line in open(p):
-    m = re.match(r'^(\w+)=([0-9A-Fa-f]{6})\s*$', line.strip())
-    if m: palette[m.group(1)] = m.group(2)
-
-bg = palette.get('bg', '000000')
-fg = palette.get('fg', 'ffffff')
-palette['bg_light'] = blend(bg, fg, 0.07)
-palette['bg_highlight'] = blend(bg, fg, 0.19)
-palette['fg_dim'] = blend(fg, bg, 0.33)
-palette['fg_muted'] = blend(fg, bg, 0.55)
-palette['border'] = blend(bg, fg, 0.28)
-
-bg_l = colorsys.rgb_to_hls(*[int(bg[i:i+2],16)/255 for i in (0,2,4)])[1]
-candidates = [(k, palette[k]) for k in ['red','green','yellow','blue','magenta','cyan','bright_red','bright_green','bright_yellow','bright_blue','bright_magenta','bright_cyan'] if k in palette]
-scored = []
-for name, h in candidates:
-    r,g,b = [int(h[i:i+2],16)/255 for i in (0,2,4)]
-    _, l, s = colorsys.rgb_to_hls(r, g, b)
-    gap = abs(l - bg_l)
-    if gap < 0.1: continue
-    scored.append((s * 2 + gap * 0.5, h, name))
-scored.sort(reverse=True)
-if scored:
-    palette['accent'] = scored[0][1]
-    palette['accent_secondary'] = scored[1][1] if len(scored) > 1 else scored[0][1]
-
-with open(p, 'w') as f:
-    f.write('# Terminal color palette\n# Theme: Wallpaper (wallust)\n\n')
-    f.write('# Base colors\n')
-    for k in ['bg','bg_light','bg_highlight','fg','fg_dim','fg_muted','border']:
-        f.write(f'{k}={palette.get(k,"000000")}\n')
-    f.write('\n# Terminal 16 colors\n')
-    for pair in [('black','bright_black'),('red','bright_red'),('green','bright_green'),('yellow','bright_yellow'),('blue','bright_blue'),('magenta','bright_magenta'),('cyan','bright_cyan'),('white','bright_white')]:
-        for k in pair:
-            f.write(f'{k}={palette.get(k,"000000")}\n')
-    f.write(f'\n# Accent\naccent={palette.get("accent","7aa2f7")}\naccent_secondary={palette.get("accent_secondary","bb9af7")}\n')
-    f.write(f'cursor={palette.get("cursor", fg)}\nurl={palette.get("url", palette.get("blue","7aa2f7"))}\n')
-    f.write(f'\n# Font\nfont=JetBrainsMono Nerd Font\n')
-PYEOF
+    python3 "$HOME/.local/bin/theme-palette-postprocess.py" "$GENERATED"
 
     # Save to cache
     cp "$GENERATED" "$cache_file"

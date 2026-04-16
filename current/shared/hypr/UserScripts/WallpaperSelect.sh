@@ -191,67 +191,7 @@ apply_image_wallpaper() {
   else
     # Live: run wallust + fix derived colors + accent selection
     "$SCRIPTSDIR/WallustSwww.sh" "$image_path"
-    python3 << 'PYEOF'
-import colorsys, re, os
-
-def blend(c1, c2, ratio):
-    return ''.join(f'{int(int(c1[i:i+2],16)*(1-ratio)+int(c2[i:i+2],16)*ratio):02x}' for i in (0,2,4))
-
-p = os.path.expanduser('~/.config/theme/palette.conf')
-palette = {}
-for line in open(p):
-    m = re.match(r'^(\w+)=([0-9A-Fa-f]{6})\s*$', line.strip())
-    if m: palette[m.group(1)] = m.group(2)
-
-bg = palette.get('bg', '000000')
-fg = palette.get('foreground', palette.get('fg', 'ffffff'))
-
-# Compute proper derived colors (same as theme set)
-bg_light = blend(bg, fg, 0.07)
-bg_highlight = blend(bg, fg, 0.19)
-fg_dim = blend(fg, bg, 0.33)
-fg_muted = blend(fg, bg, 0.55)
-border = blend(bg, fg, 0.28)
-
-palette['bg_light'] = bg_light
-palette['bg_highlight'] = bg_highlight
-palette['fg_dim'] = fg_dim
-palette['fg_muted'] = fg_muted
-palette['border'] = border
-
-# Auto-select accent (highest saturation)
-bg_l = colorsys.rgb_to_hls(*[int(bg[i:i+2],16)/255 for i in (0,2,4)])[1]
-candidates = [(k, palette[k]) for k in ['red','green','yellow','blue','magenta','cyan','bright_red','bright_green','bright_yellow','bright_blue','bright_magenta','bright_cyan'] if k in palette]
-scored = []
-for name, h in candidates:
-    r,g,b = [int(h[i:i+2],16)/255 for i in (0,2,4)]
-    _, l, s = colorsys.rgb_to_hls(r, g, b)
-    gap = abs(l - bg_l)
-    if gap < 0.1: continue
-    scored.append((s * 2 + gap * 0.5, h, name))
-scored.sort(reverse=True)
-
-if scored:
-    palette['accent'] = scored[0][1]
-    palette['accent_secondary'] = scored[1][1] if len(scored) > 1 else scored[0][1]
-
-# Write corrected palette
-with open(p, 'w') as f:
-    f.write('# Terminal color palette — single source of truth\n')
-    f.write('# Theme: Wallpaper (wallust)\n')
-    f.write('# Edit this file, then run: theme sync\n\n')
-    f.write('# Base colors\n')
-    for k in ['bg','bg_light','bg_highlight','fg','fg_dim','fg_muted','border']:
-        f.write(f'{k}={palette.get(k,"000000")}\n')
-    f.write('\n# Terminal 16 colors\n')
-    for pair in [('black','bright_black'),('red','bright_red'),('green','bright_green'),('yellow','bright_yellow'),('blue','bright_blue'),('magenta','bright_magenta'),('cyan','bright_cyan'),('white','bright_white')]:
-        for k in pair:
-            f.write(f'{k}={palette.get(k,"000000")}\n')
-    f.write(f'\n# Accent\naccent={palette.get("accent","7aa2f7")}\naccent_secondary={palette.get("accent_secondary","bb9af7")}\n')
-    f.write(f'cursor={palette.get("cursor", fg)}\nurl={palette.get("url", palette.get("blue","7aa2f7"))}\n')
-    font = palette.get('font', 'JetBrainsMono Nerd Font')
-    f.write(f'\n# Font\nfont={font}\n')
-PYEOF
+    python3 "$HOME/.local/bin/theme-palette-postprocess.py" "$HOME/.config/theme/palette.conf"
     # Save to cache for next time
     mkdir -p "$CACHE_DIR"
     cp "$HOME/.config/theme/palette.conf" "$cache_file"
