@@ -13,7 +13,8 @@ Scope {
     property string searchText: ""
 
     function toggle() { visible = !visible; searchText = "" }
-    function hide() { visible = false; searchText = "" }
+    function hide() { visible = false; searchText = ""; searchCleared = true }
+    property bool searchCleared: false
 
     IpcHandler {
         target: "launcher"
@@ -139,6 +140,10 @@ Scope {
                                 clip: true
                                 focus: root.visible
                                 onTextChanged: { root.searchText = text; appList.currentIndex = 0 }
+                                Connections {
+                                    target: root
+                                    function onVisibleChanged() { if (root.visible) searchInput.text = "" }
+                                }
                                 Keys.onReturnPressed: {
                                     // Run as terminal command if starts with > or !
                                     if (text.startsWith(">") || text.startsWith("!")) {

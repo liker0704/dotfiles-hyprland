@@ -13,15 +13,15 @@ PanelWindow {
     anchors.top: true
     anchors.left: true
     anchors.right: true
-    implicitHeight: 40
-    margins.top: 4
+    implicitHeight: 36
+    margins.top: 3
     margins.left: 6
     margins.right: 6
     color: "transparent"
     Colors { id: colors }
 
     property HyprlandMonitor monitor: Hyprland.monitorFor(bar.screen)
-    property real pillHeight: bar.height - 10
+    property real pillHeight: bar.height - 6
 
     // --- Data sources ---
     FileView { id: batCapacity; path: "/sys/class/power_supply/BAT0/capacity"; watchChanges: true }
@@ -138,21 +138,26 @@ PanelWindow {
                 Layout.alignment: Qt.AlignVCenter
 
                 Image {
-                    anchors.fill: parent
+                    anchors.centerIn: parent
+                    width: 16; height: 16
                     source: modelData.icon
-                    fillMode: Image.PreserveAspectFit; smooth: true
-                    sourceSize.width: 18; sourceSize.height: 18
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true; mipmap: true
+                    sourceSize.width: 64; sourceSize.height: 64
                 }
 
                 MouseArea {
                     id: trayMouse
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    cursorShape: Qt.PointingHandCursor
                     onClicked: function(event) {
                         if (event.button === Qt.RightButton) {
                             if (modelData.hasMenu) {
-                                // anchor.item places menu below the icon
-                                modelData.display(bar, parent.x, bar.implicitHeight)
+                                var totalX = 0; var totalY = 0
+                                var item = trayMouse.parent
+                                while (item && item !== bar) { totalX += item.x; totalY += item.y; item = item.parent }
+                                modelData.display(bar, totalX + event.x, totalY + event.y)
                             }
                         } else {
                             modelData.activate()

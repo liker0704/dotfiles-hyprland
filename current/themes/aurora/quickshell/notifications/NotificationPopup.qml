@@ -22,8 +22,7 @@ Scope {
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
             exclusionMode: ExclusionMode.Ignore
             // Don't block clicks — only cover notification area
-            anchors { top: true }
-            anchors.horizontalCenter: true
+            anchors { top: true; left: true; right: true }
             implicitWidth: 420
             implicitHeight: notifCol.implicitHeight + 60
 
