@@ -46,7 +46,7 @@ Item {
             Item { Layout.fillWidth: true }
             Text {
                 text: cal.monthNames[cal.displayMonth] + " " + cal.displayYear
-                color: cal.fg; font.family: "JetBrainsMono Nerd Font"
+                color: cal.fg; font.family: Appearance.font.ui
                 font.pixelSize: 14; font.weight: Font.Bold
                 Layout.alignment: Qt.AlignVCenter
             }
@@ -67,7 +67,7 @@ Item {
                 Text {
                     width: (cal.width) / 7; text: modelData
                     horizontalAlignment: Text.AlignHCenter
-                    color: cal.fgMuted; font.family: "JetBrainsMono Nerd Font"
+                    color: cal.fgMuted; font.family: Appearance.font.ui
                     font.pixelSize: 11; font.weight: Font.Bold
                 }
             }
@@ -98,7 +98,7 @@ Item {
                         anchors.centerIn: parent
                         text: parent.isCurrentMonth ? parent.dayNum.toString() : ""
                         color: parent.isToday ? "#000000" : cal.fgDim
-                        font.family: "JetBrainsMono Nerd Font"
+                        font.family: Appearance.font.ui
                         font.pixelSize: 12
                         font.weight: parent.isToday ? Font.Bold : Font.Normal
                     }

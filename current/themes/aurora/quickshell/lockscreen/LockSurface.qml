@@ -7,7 +7,7 @@ Rectangle {
     id: root
 
     required property var context
-    color: Qt.rgba(colors.bg.r, colors.bg.g, colors.bg.b, 1.0)
+    color: Qt.rgba(Colors.bg.r, Colors.bg.g, Colors.bg.b, 1.0)
 
 
     // Clock
@@ -34,16 +34,16 @@ Rectangle {
         // Time
         Text {
             text: root.timeStr
-            font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 80; font.weight: Font.Bold
-            color: colors.fg
+            font.family: Appearance.font.ui; font.pixelSize: 80; font.weight: Font.Bold
+            color: Colors.fg
             Layout.alignment: Qt.AlignHCenter
         }
 
         // Date
         Text {
             text: root.dateStr
-            font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 18
-            color: colors.fgDim
+            font.family: Appearance.font.ui; font.pixelSize: 18
+            color: Colors.fgDim
             Layout.alignment: Qt.AlignHCenter
         }
 
@@ -53,11 +53,11 @@ Rectangle {
         Rectangle {
             Layout.alignment: Qt.AlignHCenter
             width: 320; height: 48; radius: 24
-            color: colors.bgHighlight
+            color: Colors.bgHighlight
             border.width: root.context.showFailure ? 2 : 1
             border.color: root.context.showFailure
-                ? colors.error
-                : (passwordInput.activeFocus ? colors.accent : Qt.rgba(colors.fg.r, colors.fg.g, colors.fg.b, 0.1))
+                ? Colors.error
+                : (passwordInput.activeFocus ? Colors.accent : Qt.rgba(Colors.fg.r, Colors.fg.g, Colors.fg.b, 0.1))
 
             Behavior on border.color { ColorAnimation { duration: 150 } }
 
@@ -67,15 +67,15 @@ Rectangle {
                 Text {
                     text: root.context.unlockInProgress ? "󰑐" : "󰌾"
                     font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 18
-                    color: root.context.showFailure ? colors.error : colors.fgMuted
+                    color: root.context.showFailure ? Colors.error : Colors.fgMuted
                     Layout.alignment: Qt.AlignVCenter
                 }
 
                 TextInput {
                     id: passwordInput
                     Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter
-                    font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 16
-                    color: colors.fg
+                    font.family: Appearance.font.ui; font.pixelSize: 16
+                    color: Colors.fg
                     echoMode: TextInput.Password
                     focus: true
                     enabled: !root.context.unlockInProgress
@@ -93,7 +93,7 @@ Rectangle {
                     Text {
                         visible: passwordInput.text === "" && !passwordInput.activeFocus
                         text: "Password"
-                        font: passwordInput.font; color: colors.fgMuted
+                        font: passwordInput.font; color: Colors.fgMuted
                     }
                 }
             }
@@ -103,8 +103,8 @@ Rectangle {
         Text {
             visible: root.context.showFailure
             text: "Incorrect password"
-            font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13
-            color: colors.error
+            font.family: Appearance.font.ui; font.pixelSize: 13
+            color: Colors.error
             Layout.alignment: Qt.AlignHCenter
         }
 
@@ -114,15 +114,15 @@ Rectangle {
             Layout.alignment: Qt.AlignHCenter
             width: 120; height: 36; radius: 18
             color: unlockMA.containsMouse
-                ? Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.3)
-                : Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.15)
+                ? Qt.rgba(Colors.accent.r, Colors.accent.g, Colors.accent.b, 0.3)
+                : Qt.rgba(Colors.accent.r, Colors.accent.g, Colors.accent.b, 0.15)
             Behavior on color { ColorAnimation { duration: 100 } }
 
             Text {
                 anchors.centerIn: parent
                 text: root.context.unlockInProgress ? "Unlocking..." : "Unlock"
-                font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; font.weight: Font.Bold
-                color: colors.accent
+                font.family: Appearance.font.ui; font.pixelSize: 13; font.weight: Font.Bold
+                color: Colors.accent
             }
             MouseArea {
                 id: unlockMA; anchors.fill: parent; hoverEnabled: true

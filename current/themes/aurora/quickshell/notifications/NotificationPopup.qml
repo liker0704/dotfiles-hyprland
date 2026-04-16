@@ -86,7 +86,7 @@ Scope {
                                     Text {
                                         text: cardRoot.modelData.appName || "Notification"
                                         color: root.theme.fgMuted
-                                        font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12
+                                        font.family: Appearance.font.ui; font.pixelSize: 12
                                         font.capitalization: Font.AllUppercase
                                         Layout.alignment: Qt.AlignVCenter
                                     }
@@ -102,14 +102,14 @@ Scope {
                                 // Title
                                 Text {
                                     text: cardRoot.modelData.summary; color: root.theme.fg
-                                    font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 17; font.weight: Font.Bold
+                                    font.family: Appearance.font.ui; font.pixelSize: 17; font.weight: Font.Bold
                                     elide: Text.ElideRight; Layout.fillWidth: true; visible: text !== ""
                                 }
 
                                 // Body
                                 Text {
                                     text: cardRoot.modelData.body; color: root.theme.fgDim
-                                    font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14
+                                    font.family: Appearance.font.ui; font.pixelSize: 14
                                     wrapMode: Text.Wrap; maximumLineCount: 4; elide: Text.ElideRight
                                     Layout.fillWidth: true; visible: text !== ""; lineHeight: 1.2
                                 }
@@ -123,7 +123,7 @@ Scope {
                                             required property var modelData
                                             Layout.fillWidth: true; height: 28; radius: 8
                                             color: actMA.containsMouse ? Qt.rgba(root.theme.accent.r, root.theme.accent.g, root.theme.accent.b, 0.2) : root.theme.bgHighlight
-                                            Text { anchors.centerIn: parent; text: modelData.text; color: root.theme.accent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
+                                            Text { anchors.centerIn: parent; text: modelData.text; color: root.theme.accent; font.family: Appearance.font.ui; font.pixelSize: 12; font.weight: Font.Bold }
                                             MouseArea { id: actMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: cardRoot.modelData.invokeAction(modelData.identifier) }
                                         }
                                     }

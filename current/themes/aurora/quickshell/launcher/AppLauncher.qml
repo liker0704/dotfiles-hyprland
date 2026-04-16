@@ -127,14 +127,16 @@ Scope {
                             anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; spacing: 8
 
                             Text {
-                                text: "󰍉"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 18
+                                text: "󰍉"; font.family: Appearance.font.mono; font.pixelSize: 20
                                 color: Colors.fgMuted; Layout.alignment: Qt.AlignVCenter
+                                renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting
                             }
 
                             TextInput {
                                 id: searchInput
                                 Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter
-                                font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 18
+                                font.family: Appearance.font.ui; font.pixelSize: 18
+                                renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting
                                 color: Colors.fg
                                 clip: true
                                 focus: root.visible
@@ -202,16 +204,18 @@ Scope {
                                     spacing: 0; Layout.alignment: Qt.AlignVCenter
                                     Text {
                                         text: modelData.name
-                                        font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 15; font.weight: Font.Bold
+                                        font.family: Appearance.font.ui; font.pixelSize: 16; font.weight: Font.Bold
                                         color: Colors.fg; elide: Text.ElideRight
                                         Layout.fillWidth: true
+                                        renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting
                                     }
                                     Text {
                                         visible: (modelData.genericName || "") !== ""
                                         text: modelData.genericName || ""
-                                        font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11
+                                        font.family: Appearance.font.ui; font.pixelSize: 13
                                         color: Colors.fgMuted; elide: Text.ElideRight
                                         Layout.fillWidth: true
+                                        renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting
                                     }
                                 }
                             }
@@ -227,8 +231,9 @@ Scope {
                     // Count
                     Text {
                         text: root.filteredApps.length + " apps"
-                        font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11
+                        font.family: Appearance.font.ui; font.pixelSize: 13
                         color: Colors.fgMuted; Layout.alignment: Qt.AlignRight
+                        renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting
                     }
                 }
             }

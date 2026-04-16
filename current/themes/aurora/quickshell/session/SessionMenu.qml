@@ -109,14 +109,14 @@ Scope {
                                 }
                                 Text {
                                     text: modelData.label
-                                    font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; font.weight: Font.Bold
+                                    font.family: Appearance.font.ui; font.pixelSize: 13; font.weight: Font.Bold
                                     color: btnMA.containsMouse ? Colors.accent : Colors.fgDim
                                     Layout.alignment: Qt.AlignHCenter
                                     Behavior on color { ColorAnimation { duration: 150 } }
                                 }
                                 Text {
                                     text: String.fromCharCode(modelData.key).toUpperCase()
-                                    font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10
+                                    font.family: Appearance.font.ui; font.pixelSize: 10
                                     color: Colors.fgMuted; Layout.alignment: Qt.AlignHCenter
                                 }
                             }

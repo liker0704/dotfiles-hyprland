@@ -77,7 +77,7 @@ Item {
                 spacing: 2
                 Text {
                     text: bat.percent + "%"
-                    font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 24; font.weight: Font.Bold
+                    font.family: Appearance.font.ui; font.pixelSize: 24; font.weight: Font.Bold
                     color: bat.fg
                 }
                 Text {
@@ -94,7 +94,7 @@ Item {
         // Power profile label
         Text {
             text: "Power Mode"
-            font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold
+            font.family: Appearance.font.ui; font.pixelSize: 11; font.weight: Font.Bold
             color: bat.fgMuted
         }
 
@@ -123,7 +123,7 @@ Item {
                         }
                         Text {
                             text: modelData.label
-                            font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold
+                            font.family: Appearance.font.ui; font.pixelSize: 12; font.weight: Font.Bold
                             color: bat.currentProfile === modelData.name ? bat.accent : bat.fg
                             Layout.alignment: Qt.AlignVCenter
                         }

@@ -110,7 +110,7 @@ Scope {
 
                         Text {
                             text: Math.round((root.showVolume ? root.volumeValue : root.brightnessValue) * 100) + "%"
-                            font.family: Appearance.font.family; font.pointSize: Appearance.font.body; font.bold: true
+                            font.family: Appearance.font.ui; font.pointSize: Appearance.font.body; font.bold: true
                             color: Colors.fgDim; Layout.preferredWidth: 35; Layout.alignment: Qt.AlignVCenter
                         }
                     }

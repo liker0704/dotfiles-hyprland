@@ -23,7 +23,7 @@ Item {
         Text {
             text: Math.round(vol.volume * 100) + "%"
             color: vol.muted ? vol.fgMuted : vol.fg
-            font.family: "JetBrainsMono Nerd Font"
+            font.family: Appearance.font.ui
             font.pixelSize: 36; font.weight: Font.Bold
             Layout.alignment: Qt.AlignHCenter
         }

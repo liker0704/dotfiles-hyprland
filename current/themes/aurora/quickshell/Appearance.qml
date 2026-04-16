@@ -22,15 +22,22 @@ Singleton {
         readonly property int xl: 24
     }
 
-    // Font sizes (pointSize for DPI independence)
+    // Font roles
+    //   ui        — SF Pro Text for small (<18pt). Optical-sized for tiny labels.
+    //   uiDisplay — SF Pro Display for big (≥18pt). Larger x-height, tighter kerning.
+    //   mono      — JetBrainsMono Nerd Font. Terminals, Nerd glyph icons.
+    //   family    — back-compat alias = mono.
     readonly property QtObject font: QtObject {
+        readonly property string ui: "SF Pro Text, Inter, JetBrainsMono Nerd Font"
+        readonly property string uiDisplay: "SF Pro Display, Inter, JetBrainsMono Nerd Font"
+        readonly property string mono: "JetBrainsMono Nerd Font"
         readonly property string family: "JetBrainsMono Nerd Font"
-        readonly property int caption: 9
-        readonly property int label: 10
-        readonly property int body: 11
-        readonly property int bodyLarge: 12
-        readonly property int title: 14
-        readonly property int titleLarge: 16
+        readonly property int caption: 11
+        readonly property int label: 12
+        readonly property int body: 13
+        readonly property int bodyLarge: 14
+        readonly property int title: 16
+        readonly property int titleLarge: 18
         readonly property int headline: 22
         readonly property int display: 36
         readonly property int displayLarge: 64

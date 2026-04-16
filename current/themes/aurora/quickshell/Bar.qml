@@ -13,7 +13,7 @@ PanelWindow {
     anchors.top: true
     anchors.left: true
     anchors.right: true
-    implicitHeight: 36
+    implicitHeight: 40
     margins.top: 3
     margins.left: 6
     margins.right: 6
@@ -78,7 +78,8 @@ PanelWindow {
         color: Colors.bgPill
         Text {
             id: clockText; anchors.centerIn: parent; text: bar.timeStr
-            font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; font.weight: Font.DemiBold; color: Colors.fg
+            font.family: Appearance.font.ui; font.pixelSize: 15; font.weight: Font.DemiBold; color: Colors.fg
+            renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting
         }
         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: calendarPopup.toggle() }
     }
@@ -113,13 +114,14 @@ PanelWindow {
                     Rectangle {
                         required property var modelData
                         property bool isActive: modelData.id === bar.monitor.activeWorkspace?.id
-                        Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 8
+                        Layout.preferredWidth: 30; Layout.preferredHeight: 30; radius: 9
                         color: isActive ? Colors.accent : "transparent"
                         Behavior on color { ColorAnimation { duration: 150 } }
                         Text {
                             anchors.centerIn: parent; text: modelData.id.toString()
-                            font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold
+                            font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold
                             color: parent.isActive ? Colors.bg : Colors.fgMuted
+                            renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting
                         }
                         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Hyprland.dispatch("workspace " + modelData.id) }
                     }
@@ -141,16 +143,16 @@ PanelWindow {
             Item {
                 required property var modelData
                 visible: modelData.id.indexOf("blueman") === -1 && modelData.id.indexOf("bluetooth") === -1
-                Layout.preferredWidth: visible ? 18 : 0; Layout.preferredHeight: 18
+                Layout.preferredWidth: visible ? 22 : 0; Layout.preferredHeight: 22
                 Layout.alignment: Qt.AlignVCenter
 
                 Image {
                     anchors.centerIn: parent
-                    width: 16; height: 16
+                    width: 20; height: 20
                     source: modelData.icon
                     fillMode: Image.PreserveAspectFit
                     smooth: true; mipmap: true
-                    sourceSize.width: 64; sourceSize.height: 64
+                    sourceSize.width: 128; sourceSize.height: 128
                 }
 
                 MouseArea {
@@ -184,8 +186,8 @@ PanelWindow {
                 RowLayout {
                     id: volumeArea
                     spacing: 4; Layout.alignment: Qt.AlignVCenter
-                    Text { text: bar.volumeMuted ? "󰝟" : "󰕾"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; color: bar.volumeMuted ? Colors.fgMuted : Colors.accent; Layout.alignment: Qt.AlignVCenter }
-                    Text { text: bar.volumePercent + "%"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; color: Colors.fgDim; Layout.alignment: Qt.AlignVCenter }
+                    Text { text: bar.volumeMuted ? "󰝟" : "󰕾"; font.family: Appearance.font.mono; font.pixelSize: 16; color: bar.volumeMuted ? Colors.fgMuted : Colors.accent; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
+                    Text { text: bar.volumePercent + "%"; font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold; color: Colors.fgDim; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
                     MouseArea {
                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: volumePopup.toggle()
@@ -198,8 +200,8 @@ PanelWindow {
                 // Network (click = nm-connection-editor)
                 RowLayout {
                     spacing: 4; Layout.alignment: Qt.AlignVCenter
-                    Text { text: bar.networkType === "wifi" ? "󰤢" : (bar.networkConnected ? "󰈀" : "󰤠"); font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14; color: bar.networkConnected ? Colors.accent : Colors.fgMuted; Layout.alignment: Qt.AlignVCenter }
-                    Text { visible: bar.networkType === "wifi" && bar.networkName.length > 0; text: bar.networkName; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; color: Colors.fgDim; elide: Text.ElideRight; Layout.maximumWidth: 80; Layout.alignment: Qt.AlignVCenter }
+                    Text { text: bar.networkType === "wifi" ? "󰤢" : (bar.networkConnected ? "󰈀" : "󰤠"); font.family: Appearance.font.mono; font.pixelSize: 17; color: bar.networkConnected ? Colors.accent : Colors.fgMuted; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
+                    Text { visible: bar.networkType === "wifi" && bar.networkName.length > 0; text: bar.networkName; font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold; color: Colors.fgDim; elide: Text.ElideRight; Layout.maximumWidth: 100; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Quickshell.exec(["nm-connection-editor"]) }
                 }
 
@@ -210,19 +212,19 @@ PanelWindow {
                     id: batteryArea
                     spacing: 4; Layout.alignment: Qt.AlignVCenter
                     Canvas {
-                        Layout.preferredWidth: 18; Layout.preferredHeight: 18; Layout.alignment: Qt.AlignVCenter
+                        Layout.preferredWidth: 20; Layout.preferredHeight: 20; Layout.alignment: Qt.AlignVCenter
                         property real pct: bar.batteryPercent / 100.0
                         onPctChanged: requestPaint()
                         onPaint: {
                             var ctx = getContext("2d"); ctx.clearRect(0, 0, width, height)
-                            var cx = width/2, cy = height/2, r = 7
+                            var cx = width/2, cy = height/2, r = 8
                             ctx.lineWidth = 2.5; ctx.lineCap = "round"
                             ctx.strokeStyle = Qt.rgba(1,1,1,0.08); ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI); ctx.stroke()
                             ctx.strokeStyle = bar.batteryCharging ? Colors.accent.toString() : (bar.batteryPercent > 20 ? Colors.accent.toString() : Colors.error.toString())
                             ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + pct*2*Math.PI); ctx.stroke()
                         }
                     }
-                    Text { text: bar.batteryPercent + "%"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; color: Colors.fgDim; Layout.alignment: Qt.AlignVCenter }
+                    Text { text: bar.batteryPercent + "%"; font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold; color: Colors.fgDim; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: batteryPopup.toggle() }
                 }
 
@@ -230,8 +232,9 @@ PanelWindow {
 
                 // Bell
                 Text {
-                    text: "󰂚"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14
+                    text: "󰂚"; font.family: Appearance.font.mono; font.pixelSize: 17
                     color: Colors.fg; Layout.alignment: Qt.AlignVCenter
+                    renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Quickshell.exec(["swaync-client", "-t", "-sw"]) }
                 }
             }
