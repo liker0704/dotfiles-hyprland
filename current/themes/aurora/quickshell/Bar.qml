@@ -75,7 +75,7 @@ PanelWindow {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
         width: clockText.implicitWidth + 26; height: pillHeight; radius: height / 2
-        color: Colors.bgPill
+        color: Md3.md3.surface_container
         Text {
             id: clockText; anchors.centerIn: parent; text: bar.timeStr
             font.family: Appearance.font.ui; font.pixelSize: 15; font.weight: Font.DemiBold; color: Colors.fg
@@ -88,8 +88,8 @@ PanelWindow {
     PopupBase {
         id: calendarPopup; barWindow: bar; anchorItem: clockPill
         popupWidth: 280; popupHeight: 290
-        bgColor: Colors.bg; borderColor: Qt.rgba(Colors.accent.r, Colors.accent.g, Colors.accent.b, 0.15)
-        CalendarPopup { anchors.fill: parent; accent: Colors.accent; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Colors.bgHighlight }
+        bgColor: Md3.md3.surface_container_high; borderColor: Md3.md3.outline_variant
+        CalendarPopup { anchors.fill: parent; accent: Md3.md3.primary; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Md3.md3.surface_container_highest }
     }
 
     // ==================== LEFT SECTION ====================
@@ -100,11 +100,11 @@ PanelWindow {
 
         // Workspaces
         Rectangle {
-            color: Colors.bgPill; radius: height / 2
+            color: Md3.md3.surface_container; radius: height / 2
             height: pillHeight; implicitWidth: wsRow.implicitWidth + 16
 
             RowLayout {
-                id: wsRow; anchors.centerIn: parent; spacing: 3
+                id: wsRow; anchors.centerIn: parent; spacing: 5
                 Repeater {
                     model: {
                         var ws = Hyprland.workspaces.values; var f = []
@@ -115,12 +115,13 @@ PanelWindow {
                         required property var modelData
                         property bool isActive: modelData.id === bar.monitor.activeWorkspace?.id
                         Layout.preferredWidth: 30; Layout.preferredHeight: 30; radius: 9
-                        color: isActive ? Colors.accent : "transparent"
+                        color: isActive ? Md3.md3.primary : "transparent"
                         Behavior on color { ColorAnimation { duration: 150 } }
                         Text {
                             anchors.centerIn: parent; text: modelData.id.toString()
                             font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold
-                            color: parent.isActive ? Colors.bg : Colors.fgMuted
+                            font.letterSpacing: 0.6
+                            color: parent.isActive ? Md3.md3.on_primary : Colors.fgMuted
                             renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting
                         }
                         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Hyprland.dispatch("workspace " + modelData.id) }
@@ -176,7 +177,7 @@ PanelWindow {
 
         // Status pill
         Rectangle {
-            color: Colors.bgPill; radius: height / 2
+            color: Md3.md3.surface_container; radius: height / 2
             height: pillHeight; implicitWidth: statusRow.implicitWidth + 28
 
             RowLayout {
@@ -186,7 +187,7 @@ PanelWindow {
                 RowLayout {
                     id: volumeArea
                     spacing: 4; Layout.alignment: Qt.AlignVCenter
-                    Text { text: bar.volumeMuted ? "󰝟" : "󰕾"; font.family: Appearance.font.mono; font.pixelSize: 16; color: bar.volumeMuted ? Colors.fgMuted : Colors.accent; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
+                    Text { text: bar.volumeMuted ? "󰝟" : "󰕾"; font.family: Appearance.font.mono; font.pixelSize: 16; color: bar.volumeMuted ? Colors.fgMuted : Md3.md3.primary; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
                     Text { text: bar.volumePercent + "%"; font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold; color: Colors.fgDim; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
                     MouseArea {
                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -200,7 +201,7 @@ PanelWindow {
                 // Network (click = nm-connection-editor)
                 RowLayout {
                     spacing: 4; Layout.alignment: Qt.AlignVCenter
-                    Text { text: bar.networkType === "wifi" ? "󰤢" : (bar.networkConnected ? "󰈀" : "󰤠"); font.family: Appearance.font.mono; font.pixelSize: 17; color: bar.networkConnected ? Colors.accent : Colors.fgMuted; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
+                    Text { text: bar.networkType === "wifi" ? "󰤢" : (bar.networkConnected ? "󰈀" : "󰤠"); font.family: Appearance.font.mono; font.pixelSize: 17; color: bar.networkConnected ? Md3.md3.primary : Colors.fgMuted; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
                     Text { visible: bar.networkType === "wifi" && bar.networkName.length > 0; text: bar.networkName; font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold; color: Colors.fgDim; elide: Text.ElideRight; Layout.maximumWidth: 100; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Quickshell.exec(["nm-connection-editor"]) }
                 }
@@ -220,7 +221,7 @@ PanelWindow {
                             var cx = width/2, cy = height/2, r = 8
                             ctx.lineWidth = 2.5; ctx.lineCap = "round"
                             ctx.strokeStyle = Qt.rgba(1,1,1,0.08); ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI); ctx.stroke()
-                            ctx.strokeStyle = bar.batteryCharging ? Colors.accent.toString() : (bar.batteryPercent > 20 ? Colors.accent.toString() : Colors.error.toString())
+                            ctx.strokeStyle = bar.batteryCharging ? Md3.md3.primary : (bar.batteryPercent > 20 ? Md3.md3.primary : Md3.md3.error)
                             ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + pct*2*Math.PI); ctx.stroke()
                         }
                     }
@@ -245,15 +246,15 @@ PanelWindow {
     PopupBase {
         id: volumePopup; barWindow: bar; anchorItem: volumeArea
         popupWidth: 220; popupHeight: 160
-        bgColor: Colors.bg; borderColor: Qt.rgba(Colors.accent.r, Colors.accent.g, Colors.accent.b, 0.15)
-        VolumePopup { anchors.fill: parent; accent: Colors.accent; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Colors.bgHighlight }
+        bgColor: Md3.md3.surface_container_high; borderColor: Md3.md3.outline_variant
+        VolumePopup { anchors.fill: parent; accent: Md3.md3.primary; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Md3.md3.surface_container_highest }
     }
 
     // Battery popup — power profiles
     PopupBase {
         id: batteryPopup; barWindow: bar; anchorItem: batteryArea
         popupWidth: 230; popupHeight: 260
-        bgColor: Colors.bg; borderColor: Qt.rgba(Colors.accent.r, Colors.accent.g, Colors.accent.b, 0.15)
-        BatteryPopup { anchors.fill: parent; accent: Colors.accent; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Colors.bgHighlight; percent: bar.batteryPercent; charging: bar.batteryCharging }
+        bgColor: Md3.md3.surface_container_high; borderColor: Md3.md3.outline_variant
+        BatteryPopup { anchors.fill: parent; accent: Md3.md3.primary; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Md3.md3.surface_container_highest; percent: bar.batteryPercent; charging: bar.batteryCharging }
     }
 }

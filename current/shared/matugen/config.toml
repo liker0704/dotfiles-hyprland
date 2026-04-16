@@ -1,0 +1,24 @@
+[config]
+# Material Design 3 scheme — tonal-spot matches Android 14 default look.
+# Options: scheme-tonal-spot (default, balanced) | scheme-vibrant (more saturated)
+#          scheme-fidelity (closest to wallpaper) | scheme-expressive (multi-hue)
+#          scheme-neutral / scheme-monochrome (grayscale)
+scheme = "scheme-tonal-spot"
+
+# Contrast: -1..1. 0.3 noticeably separates surface tones without overdoing it.
+contrast = 0.3
+
+# When multiple dominant colors are candidates, pick by saturation.
+prefer = "saturation"
+
+# Dark mode by default. Script in 05-matugen.sh can override per-wallpaper.
+mode = "dark"
+
+[templates.quickshell-md3]
+input_path = "~/.config/matugen/templates/quickshell.json"
+output_path = "~/.local/state/quickshell/generated/colors.json"
+
+# Kitty + tmux intentionally NOT here — matugen's wallpaper-dominant palette
+# collapses ANSI colors into shades of one hue, breaking syntax highlighting.
+# Terminal colors come from wallust via ~/.local/share/theme/targets/20-kitty.sh
+# and 23-tmux.sh (proper distinct red/green/yellow/blue regardless of wallpaper).

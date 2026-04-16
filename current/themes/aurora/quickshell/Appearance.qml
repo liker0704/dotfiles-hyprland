@@ -28,8 +28,8 @@ Singleton {
     //   mono      — JetBrainsMono Nerd Font. Terminals, Nerd glyph icons.
     //   family    — back-compat alias = mono.
     readonly property QtObject font: QtObject {
-        readonly property string ui: "SF Pro Text, Inter, JetBrainsMono Nerd Font"
-        readonly property string uiDisplay: "SF Pro Display, Inter, JetBrainsMono Nerd Font"
+        readonly property string ui: "SF Pro Text, JetBrainsMono Nerd Font Propo"
+        readonly property string uiDisplay: "SF Pro Display, JetBrainsMono Nerd Font Propo"
         readonly property string mono: "JetBrainsMono Nerd Font"
         readonly property string family: "JetBrainsMono Nerd Font"
         readonly property int caption: 11

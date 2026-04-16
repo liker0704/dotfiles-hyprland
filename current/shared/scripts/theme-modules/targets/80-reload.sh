@@ -1,8 +1,14 @@
 # Reload all applications
 
 # Tmux
-if pgrep -x tmux &>/dev/null; then
+if pgrep tmux &>/dev/null; then
   tmux source-file ~/.config/tmux/tmux.conf 2>/dev/null
+  # Force every client to redraw — fixes stale bg in running panes after palette change
+  tmux refresh-client -S 2>/dev/null
+  # Clear each pane's history background (sends reset + clear), restoring new kitty bg
+  for pane in $(tmux list-panes -a -F '#{pane_id}' 2>/dev/null); do
+    tmux send-keys -t "$pane" -X clear-selection 2>/dev/null
+  done
   echo -e "    ${GREEN}tmux reloaded${RESET}"
 fi
 

@@ -1,19 +1,10 @@
 #!/bin/bash
 # Matugen integration — runs BEFORE other targets (hence 05- prefix).
-# Only fires when engine=matugen in ~/.config/theme/config.
-# Extracts colors from current wallpaper and regenerates palette.conf.
+# Always generates Material Design 3 palette alongside wallust.
+# wallust still owns terminal ANSI (kitty/tmux); matugen drives MD3
+# tonal roles for Quickshell UI via ~/.config/matugen/config.toml.
 
-THEME_CONFIG="$HOME/.config/theme/config"
 PALETTE="$HOME/.config/theme/palette.conf"
-
-# Skip if engine is not matugen
-if [[ -f "$THEME_CONFIG" ]]; then
-  engine=$(grep -E '^engine=' "$THEME_CONFIG" 2>/dev/null | cut -d= -f2)
-fi
-
-if [[ "${engine:-wallust}" != "matugen" ]]; then
-  return 0 2>/dev/null || exit 0
-fi
 
 # Check matugen is installed
 if ! command -v matugen &>/dev/null; then
@@ -37,12 +28,41 @@ if [[ -z "$WALLPAPER" || ! -f "$WALLPAPER" ]]; then
   return 0 2>/dev/null || exit 0
 fi
 
-# Run matugen (if config exists)
+# Use wallust-picked accent (palette.conf) as MD3 seed.
+# Wallust extracts the visually dominant color from the wallpaper (saturation-
+# weighted), then matugen derives all MD3 tonal roles around THAT seed via HCT.
+# Result: one unified hue family (accent + secondary + surfaces all share the
+# wallust-picked tone). Falls back to image-based scheme if no accent yet.
 MATUGEN_CONFIG="$HOME/.config/matugen/config.toml"
-if [[ -f "$MATUGEN_CONFIG" ]]; then
-  matugen image "$WALLPAPER" -c "$MATUGEN_CONFIG" 2>/dev/null
-else
-  matugen image "$WALLPAPER" 2>/dev/null
+seed=""
+if [[ -f "$PALETTE" ]]; then
+  seed=$(grep '^accent=' "$PALETTE" | head -1 | cut -d= -f2 | tr -d ' \r\n')
 fi
 
-echo -e "  \033[0;32mmatugen\033[0m (from: $(basename "$WALLPAPER"))"
+if [[ -n "$seed" ]]; then
+  if [[ -f "$MATUGEN_CONFIG" ]]; then
+    matugen color hex "#$seed" -c "$MATUGEN_CONFIG" 2>/dev/null
+  else
+    matugen color hex "#$seed" 2>/dev/null
+  fi
+  source_label="seed: #$seed"
+else
+  if [[ -f "$MATUGEN_CONFIG" ]]; then
+    matugen image "$WALLPAPER" -c "$MATUGEN_CONFIG" 2>/dev/null
+  else
+    matugen image "$WALLPAPER" 2>/dev/null
+  fi
+  source_label="image: $(basename "$WALLPAPER")"
+fi
+
+# Update accent_secondary in palette.conf with matugen's harmonized secondary.
+# accent itself stays as wallust pick (the seed) — that's the source tone.
+QS_JSON="$HOME/.local/state/quickshell/generated/colors.json"
+if [[ -f "$QS_JSON" && -f "$PALETTE" ]]; then
+  secondary=$(python3 -c "import json,sys; print(json.load(open('$QS_JSON'))['md3'].get('secondary','').lstrip('#'))" 2>/dev/null)
+  if [[ -n "$secondary" ]]; then
+    sed -i "s/^accent_secondary=.*/accent_secondary=$secondary/" "$PALETTE"
+  fi
+fi
+
+echo -e "  \033[0;32mmatugen\033[0m ($source_label)"
