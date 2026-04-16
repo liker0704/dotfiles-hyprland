@@ -1,0 +1,135 @@
+/* Aurora swaync — glassy notifications with slide-fade */
+
+* {
+  font-family: "JetBrainsMono Nerd Font", "NotoSans Nerd Font", sans-serif;
+  font-size: 13px;
+  color: #e6e6f0;
+}
+
+/* Notification window (the whole popup overlay) */
+.notification-row {
+  outline: none;
+  margin-top: 10px;
+  border-radius: 20px;
+}
+
+/* Individual notification card */
+.notification {
+  border-radius: 20px;
+  background: rgba(24, 26, 33, 0.88);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(122, 168, 255, 0.12);
+  margin: 6px 12px;
+  padding: 0;
+  animation: slide-fade 220ms cubic-bezier(0.05, 0.9, 0.1, 1.05);
+}
+
+@keyframes slide-fade {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+.notification-content {
+  padding: 12px 16px;
+  border-radius: 20px;
+}
+
+.notification-default-action,
+.notification-action {
+  border-radius: 14px;
+  padding: 4px 10px;
+}
+
+.notification-default-action:hover {
+  background: rgba(122, 168, 255, 0.14);
+}
+
+/* Title / body text */
+.summary {
+  font-weight: 600;
+  font-size: 14px;
+  color: #e6e6f0;
+}
+
+.body {
+  color: #a5a9c2;
+  font-size: 13px;
+}
+
+.time {
+  color: #6f7590;
+  font-size: 11px;
+}
+
+/* Urgency tints */
+.notification.low .summary     { color: #7be0a7; }
+.notification.normal .summary  { color: #7aa8ff; }
+.notification.critical {
+  border-color: rgba(255, 107, 122, 0.45);
+  box-shadow:
+    0 8px 24px rgba(255, 107, 122, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.notification.critical .summary { color: #ff6b7a; }
+
+/* Close button */
+.close-button {
+  background: rgba(255, 107, 122, 0.12);
+  color: #ff6b7a;
+  text-shadow: none;
+  padding: 0;
+  border-radius: 999px;
+  margin: 8px;
+  box-shadow: none;
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.close-button:hover {
+  background: rgba(255, 107, 122, 0.3);
+  color: #ffffff;
+}
+
+/* Control center (swaync-control-center) */
+.control-center {
+  border-radius: 22px;
+  background: rgba(15, 16, 20, 0.94);
+  border: 1px solid rgba(122, 168, 255, 0.15);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55);
+  padding: 12px;
+}
+
+.widget-title > label {
+  color: #cdd1e4;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.widget-title button {
+  border-radius: 999px;
+  padding: 4px 14px;
+  background: rgba(122, 168, 255, 0.14);
+  color: #7aa8ff;
+}
+
+.widget-title button:hover {
+  background: rgba(122, 168, 255, 0.28);
+}
+
+.widget-mpris-player {
+  padding: 10px;
+  margin: 8px 0;
+  border-radius: 16px;
+  background: rgba(35, 38, 49, 0.75);
+}
+
+.widget-dnd > switch {
+  background: rgba(55, 60, 75, 0.6);
+  border-radius: 999px;
+}
+
+.widget-dnd > switch:checked {
+  background: linear-gradient(135deg, #7aa8ff, #c99bff);
+}

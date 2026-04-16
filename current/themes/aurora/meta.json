@@ -1,0 +1,7 @@
+{
+  "name": "Aurora",
+  "description": "Glassy, rounded UI with gradient accents and smooth animations. Inspired by Material Design 3 and ilyamiro's NixOS rice.",
+  "accent_color": "#7aa8ff",
+  "engine": "matugen",
+  "requires": ["matugen"]
+}

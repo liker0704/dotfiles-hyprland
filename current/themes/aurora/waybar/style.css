@@ -1,0 +1,155 @@
+/* Aurora Waybar — pill modules + glassmorphism
+ * Generated-static variant. theme sync may overwrite colors from palette. */
+
+* {
+  font-family: "JetBrainsMono Nerd Font", "NotoSans Nerd Font", sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  min-height: 0;
+  padding: 0;
+  border: none;
+}
+
+#waybar {
+  background: transparent;
+  color: #e6e6f0;
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------
+ * Every top-level module: pill shape, glassy bg, soft inner highlight.
+ * --------------------------------------------------------------- */
+#workspaces,
+#clock,
+#tray,
+#bluetooth,
+#network,
+#pulseaudio,
+#backlight,
+#battery,
+#custom-power {
+  background-color: rgba(24, 26, 33, 0.72);
+  color: #cdd1e4;
+  padding: 0.25rem 0.85rem;
+  margin: 5px 4px;
+  border-radius: 999px;
+  box-shadow:
+    0 2px 10px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition:
+    background-color 180ms cubic-bezier(0.05, 0.9, 0.1, 1.05),
+    color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+#workspaces:hover,
+#clock:hover,
+#tray:hover,
+#bluetooth:hover,
+#network:hover,
+#pulseaudio:hover,
+#backlight:hover,
+#battery:hover,
+#custom-power:hover {
+  background-color: rgba(40, 44, 58, 0.85);
+  box-shadow:
+    0 4px 18px rgba(122, 168, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* ---------------------------------------------------------------
+ * Workspaces — capsule with dot indicators
+ * --------------------------------------------------------------- */
+#workspaces {
+  padding: 0.15rem 0.35rem;
+}
+
+#workspaces button {
+  color: #6f7590;
+  min-width: 16px;
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  margin: 0 2px;
+  background: transparent;
+  transition:
+    background-color 180ms cubic-bezier(0.05, 0.9, 0.1, 1.05),
+    color 160ms ease;
+}
+
+#workspaces button.active {
+  color: #0f1014;
+  background:
+    linear-gradient(135deg, #7aa8ff 0%, #c99bff 100%);
+  box-shadow: 0 2px 8px rgba(122, 168, 255, 0.35);
+}
+
+#workspaces button:hover {
+  background-color: rgba(122, 168, 255, 0.18);
+  color: #e6e6f0;
+}
+
+/* ---------------------------------------------------------------
+ * Clock — centered, slightly larger
+ * --------------------------------------------------------------- */
+#clock {
+  font-weight: 600;
+  color: #e6e6f0;
+  padding: 0.25rem 1rem;
+}
+
+/* ---------------------------------------------------------------
+ * Accent-tinted icons per module
+ * --------------------------------------------------------------- */
+#bluetooth { color: #7aa8ff; }
+#network   { color: #7be0a7; }
+#pulseaudio { color: #c99bff; }
+#backlight { color: #ffd580; }
+#battery   { color: #7be0a7; }
+#custom-power { color: #ff6b7a; padding: 0.25rem 0.75rem; }
+
+/* Battery states — color-code urgency */
+#battery.charging { color: #7be0a7; }
+#battery.warning:not(.charging)  { color: #ffd580; }
+#battery.critical:not(.charging) {
+  color: #ff6b7a;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+/* Pulseaudio muted */
+#pulseaudio.muted { color: #6f7590; }
+
+/* ---------------------------------------------------------------
+ * Tray
+ * --------------------------------------------------------------- */
+#tray { padding: 0.15rem 0.55rem; }
+
+#tray > .passive { -gtk-icon-effect: dim; }
+#tray > .active  { -gtk-icon-effect: highlight; }
+
+/* ---------------------------------------------------------------
+ * Power button — accent-coloured capsule
+ * --------------------------------------------------------------- */
+#custom-power {
+  background-color: rgba(255, 107, 122, 0.14);
+  color: #ff6b7a;
+}
+
+#custom-power:hover {
+  background-color: rgba(255, 107, 122, 0.28);
+  color: #ffffff;
+}
+
+/* ---------------------------------------------------------------
+ * Tooltip styling
+ * --------------------------------------------------------------- */
+tooltip {
+  background-color: rgba(15, 16, 20, 0.95);
+  border: 1px solid rgba(122, 168, 255, 0.25);
+  border-radius: 12px;
+  color: #e6e6f0;
+}

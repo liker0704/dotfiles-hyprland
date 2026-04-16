@@ -1,0 +1,8 @@
+# Aurora theme config — consumed by theme-modules
+# Sets engine and feature flags
+
+engine=matugen
+reload_hyprland=true
+reload_waybar=true
+reload_swaync=true
+reload_kitty=true
