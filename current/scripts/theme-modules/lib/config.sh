@@ -1,0 +1,12 @@
+# Shared paths and constants for theme modules
+PALETTE="$HOME/.config/theme/palette.conf"
+GOGH_CACHE="$HOME/.config/theme/gogh-themes.json"
+GOGH_URL="https://raw.githubusercontent.com/Gogh-Co/Gogh/master/data/themes.json"
+CUSTOM_THEMES="$HOME/.config/theme/custom-themes.json"
+FAVORITES="$HOME/.config/theme/favorites"
+BACKUP_DIR="$HOME/.config/theme/backup"
+ANIMATIONS_CONF="$HOME/.config/hypr/UserConfigs/UserAnimations.conf"
+DEFAULT_ANIM="$HOME/.config/hypr/animations/00-default.conf"
+THEME_DIR="$HOME/.local/share/theme"
+THEME_LIB="$THEME_DIR/lib"
+VENV_PY="$HOME/.local/share/theme-venv/bin/python3"
