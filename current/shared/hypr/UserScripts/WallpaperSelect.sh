@@ -180,31 +180,20 @@ apply_image_wallpaper() {
 
   swww img -o "$focused_monitor" "$image_path" $SWWW_PARAMS
 
-  # Apply wallpaper-matched palette (cached or live)
+  # Apply wallpaper-matched palette (cached or live).
+  # MD3 JSON cache is handled inside theme sync's 05-matugen.sh by hashing
+  # the current swww wallpaper path — same hash scheme used here.
   local CACHE_DIR="$HOME/.cache/wallpaper-palettes"
-  local MD3_CACHE_DIR="$HOME/.cache/wallpaper-md3"
-  local MATUGEN_OUT="$HOME/.local/state/quickshell/generated/colors.json"
   local hash=$(echo "$image_path" | md5sum | cut -c1-12)
   local cache_file="$CACHE_DIR/${hash}.conf"
-  local md3_cache="$MD3_CACHE_DIR/${hash}.json"
 
   if [[ -f "$cache_file" ]]; then
-    # Instant: use pre-cached palette
     cp "$cache_file" "$HOME/.config/theme/palette.conf"
   else
-    # Live: run wallust + fix derived colors + accent selection
     "$SCRIPTSDIR/WallustSwww.sh" "$image_path"
     python3 "$HOME/.local/bin/theme-palette-postprocess.py" "$HOME/.config/theme/palette.conf"
     mkdir -p "$CACHE_DIR"
     cp "$HOME/.config/theme/palette.conf" "$cache_file"
-  fi
-
-  # MD3 JSON — cp from cache if present, lets 05-matugen.sh skip re-running matugen.
-  if [[ -f "$md3_cache" ]]; then
-    mkdir -p "$(dirname "$MATUGEN_OUT")"
-    cp "$md3_cache" "$MATUGEN_OUT"
-    # Touch newer than palette so 05-matugen.sh treats it as fresh
-    touch "$MATUGEN_OUT"
   fi
 
   # Sync theme to all apps
