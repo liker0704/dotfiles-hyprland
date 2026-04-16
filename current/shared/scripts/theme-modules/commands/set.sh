@@ -120,6 +120,45 @@ cursor={cursor if cursor else c[5]}
 url={c[5]}
 """
 
+# Auto-select accent from chromatic colors (highest saturation + contrast from bg)
+import colorsys
+
+def hex_hsl(h):
+    r, g, b = int(h[0:2],16)/255, int(h[2:4],16)/255, int(h[4:6],16)/255
+    hue, lig, sat = colorsys.rgb_to_hls(r, g, b)
+    return sat, lig
+
+# Prefer bright_ variants (softer) and desaturate for calm UI
+chromatic = [
+    ('bright_blue', c[13]), ('bright_cyan', c[15]), ('bright_green', c[11]),
+    ('bright_magenta', c[14]), ('cyan', c[7]), ('blue', c[5]),
+    ('green', c[3]), ('magenta', c[6]),
+]
+bg_l = hex_hsl(bg)[1] if bg else 0.1
+scored = []
+for name, hx in chromatic:
+    if not hx or len(hx) != 6: continue
+    s, l = hex_hsl(hx)
+    gap = abs(l - bg_l)
+    if gap < 0.10: continue
+    score = s * 1.5 + gap * 0.5
+    scored.append((score, hx, name))
+scored.sort(reverse=True)
+
+def desaturate(hex_color, amount=0.3):
+    """Mix color with gray to reduce saturation"""
+    r,g,b = int(hex_color[0:2],16), int(hex_color[2:4],16), int(hex_color[4:6],16)
+    gray = int(r*0.299 + g*0.587 + b*0.114)
+    r2 = int(r * (1-amount) + gray * amount)
+    g2 = int(g * (1-amount) + gray * amount)
+    b2 = int(b * (1-amount) + gray * amount)
+    return f"{r2:02x}{g2:02x}{b2:02x}"
+
+accent_raw = scored[0][1] if scored else c[13] or c[5]
+accent_val = desaturate(accent_raw, 0.25)
+
+palette += f"accent={accent_val}\n"
+
 # Preserve existing font from palette (Gogh themes don't have font)
 existing_font = ""
 if os.path.exists("$PALETTE"):
@@ -157,8 +196,23 @@ if font_line:
 PYEOF
 
   if [[ $? -eq 0 ]]; then
+    sync
     source "$THEME_DIR/commands/sync.sh"
     apply_palette
+    # Post-fix: re-read accent from palette and patch hyprland colors
+    source "$THEME_LIB/palette.sh"
+    read_palette
+    local _a="${C[accent]:-${C[blue]}}"
+    for f in "$HOME/.config/hypr/UserConfigs/aurora-colors.conf" "$HOME/.config/hypr/UserConfigs/monochrome-colors.conf"; do
+      [[ -f "$f" ]] && python3 -c "
+import re,sys
+t=open('$f').read()
+t=re.sub(r'(\\\$accent = rgb\()([^)]+)\)',r'\g<1>${_a})',t)
+t=re.sub(r'(\\\$accent_secondary = rgb\()([^)]+)\)',r'\g<1>${_a})',t)
+open('$f','w').write(t)
+"
+    done
+    hyprctl reload >/dev/null 2>&1
     # If theme had font, apply it too
     source "$THEME_DIR/commands/font.sh"
     local theme_font

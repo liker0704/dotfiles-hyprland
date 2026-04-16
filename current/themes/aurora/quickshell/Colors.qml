@@ -74,7 +74,7 @@ Item {
         fg = c("fg"); fgDim = c("fg_dim"); fgMuted = c("fg_muted"); border = c("border")
         bgPill = Qt.rgba(bg.r, bg.g, bg.b, 0.97)
         bgHover = Qt.rgba(bgLight.r, bgLight.g, bgLight.b, 0.97)
-        accent = c("accent", "blue"); accentSecondary = c("accent_secondary", "magenta")
+        accent = c("accent", "blue"); accentSecondary = c("accent_secondary", "accent")
         accentTertiary = c("accent_tertiary", "green")
         error = c("error", "red"); warning = c("warning", "yellow")
         success = c("success", "green"); info = c("info", "cyan")
