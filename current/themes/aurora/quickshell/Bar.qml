@@ -64,6 +64,7 @@ PanelWindow {
 
     // ==================== CLOCK (absolute center) ====================
     Rectangle {
+        id: clockPill
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
         width: clockText.implicitWidth + 26; height: pillHeight; radius: height / 2
@@ -72,7 +73,15 @@ PanelWindow {
             id: clockText; anchors.centerIn: parent; text: bar.timeStr
             font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; font.weight: Font.DemiBold; color: colors.fg
         }
-        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Quickshell.exec(["gnome-calendar"]) }
+        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: calendarPopup.toggle() }
+    }
+
+    // Calendar popup — centered under clock (clock is horizontalCenter of bar)
+    PopupBase {
+        id: calendarPopup; barWindow: bar; anchorItem: clockPill
+        popupWidth: 280; popupHeight: 290
+        bgColor: colors.bg; borderColor: Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.15)
+        CalendarPopup { anchors.fill: parent; accent: colors.accent; fg: colors.fg; fgDim: colors.fgDim; fgMuted: colors.fgMuted; bgHighlight: colors.bgHighlight }
     }
 
     // ==================== LEFT SECTION ====================
@@ -145,18 +154,15 @@ PanelWindow {
             RowLayout {
                 id: statusRow; anchors.centerIn: parent; spacing: 10
 
-                // Volume (click = pavucontrol, scroll = volume, middle = mute)
+                // Volume (click = popup, scroll = volume)
                 RowLayout {
+                    id: volumeArea
                     spacing: 4; Layout.alignment: Qt.AlignVCenter
                     Text { text: bar.volumeMuted ? "󰝟" : "󰕾"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; color: bar.volumeMuted ? colors.fgMuted : colors.accent; Layout.alignment: Qt.AlignVCenter }
                     Text { text: bar.volumePercent + "%"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; color: colors.fgDim; Layout.alignment: Qt.AlignVCenter }
                     MouseArea {
                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-                        onClicked: mouse => {
-                            if (mouse.button === Qt.MiddleButton) { var s = Pipewire.defaultAudioSink; if (s?.audio) s.audio.muted = !s.audio.muted }
-                            else Quickshell.exec(["pavucontrol"])
-                        }
+                        onClicked: volumePopup.toggle()
                         onWheel: wheel => { var s = Pipewire.defaultAudioSink; if (s?.audio) s.audio.volume = Math.max(0, Math.min(1.5, s.audio.volume + (wheel.angleDelta.y > 0 ? 0.05 : -0.05))) }
                     }
                 }
@@ -173,8 +179,9 @@ PanelWindow {
 
                 Sep {}
 
-                // Battery
+                // Battery (click = popup with power profiles)
                 RowLayout {
+                    id: batteryArea
                     spacing: 4; Layout.alignment: Qt.AlignVCenter
                     Canvas {
                         Layout.preferredWidth: 18; Layout.preferredHeight: 18; Layout.alignment: Qt.AlignVCenter
@@ -190,7 +197,7 @@ PanelWindow {
                         }
                     }
                     Text { text: bar.batteryPercent + "%"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; color: colors.fgDim; Layout.alignment: Qt.AlignVCenter }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Quickshell.exec(["bash", "-c", "notify-send 'Battery' '" + bar.batteryPercent + "% " + (bar.batteryCharging ? "Charging" : "Discharging") + "'"]) }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: batteryPopup.toggle() }
                 }
 
                 Sep {}
@@ -203,5 +210,21 @@ PanelWindow {
                 }
             }
         }
+    }
+
+    // Volume popup — positioned under volume area in right pill
+    PopupBase {
+        id: volumePopup; barWindow: bar; anchorItem: volumeArea
+        popupWidth: 220; popupHeight: 160
+        bgColor: colors.bg; borderColor: Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.15)
+        VolumePopup { anchors.fill: parent; accent: colors.accent; fg: colors.fg; fgDim: colors.fgDim; fgMuted: colors.fgMuted; bgHighlight: colors.bgHighlight }
+    }
+
+    // Battery popup — power profiles
+    PopupBase {
+        id: batteryPopup; barWindow: bar; anchorItem: batteryArea
+        popupWidth: 230; popupHeight: 260
+        bgColor: colors.bg; borderColor: Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.15)
+        BatteryPopup { anchors.fill: parent; accent: colors.accent; fg: colors.fg; fgDim: colors.fgDim; fgMuted: colors.fgMuted; bgHighlight: colors.bgHighlight; percent: bar.batteryPercent; charging: bar.batteryCharging }
     }
 }
