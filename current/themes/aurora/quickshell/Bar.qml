@@ -131,17 +131,33 @@ PanelWindow {
         // Tray (no background, LEFT of status pill, hide bluetooth)
         Repeater {
             model: SystemTray.items
-            Image {
+            Item {
                 required property var modelData
                 visible: modelData.id.indexOf("blueman") === -1 && modelData.id.indexOf("bluetooth") === -1
-                source: modelData.icon
-                Layout.preferredWidth: 18; Layout.preferredHeight: 18
-                fillMode: Image.PreserveAspectFit; smooth: true
-                sourceSize.width: 18; sourceSize.height: 18
+                Layout.preferredWidth: visible ? 18 : 0; Layout.preferredHeight: 18
                 Layout.alignment: Qt.AlignVCenter
+
+                Image {
+                    anchors.fill: parent
+                    source: modelData.icon
+                    fillMode: Image.PreserveAspectFit; smooth: true
+                    sourceSize.width: 18; sourceSize.height: 18
+                }
+
                 MouseArea {
-                    anchors.fill: parent; acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    onClicked: mouse => { if (mouse.button === Qt.LeftButton) modelData.activate(); else if (mouse.button === Qt.RightButton && modelData.hasMenu) modelData.display(bar, mouse.x, mouse.y) }
+                    id: trayMouse
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onClicked: function(event) {
+                        if (event.button === Qt.RightButton) {
+                            if (modelData.hasMenu) {
+                                // anchor.item places menu below the icon
+                                modelData.display(bar, parent.x, bar.implicitHeight)
+                            }
+                        } else {
+                            modelData.activate()
+                        }
+                    }
                 }
             }
         }

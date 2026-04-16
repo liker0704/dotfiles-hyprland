@@ -1,6 +1,8 @@
+//@ pragma UseQApplication
 import Quickshell
 import Quickshell.Hyprland
 import QtQuick
+import "notifications"
 
 Scope {
     Variants {
@@ -11,4 +13,7 @@ Scope {
             screen: modelData
         }
     }
+
+    // Notification toasts (replaces swaync)
+    NotificationPopup {}
 }
