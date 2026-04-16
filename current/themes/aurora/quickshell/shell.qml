@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import QtQuick
 import "notifications"
 import "osd"
+import "session"
 
 Scope {
     Variants {
@@ -17,4 +18,5 @@ Scope {
 
     NotificationPopup {}
     OSD {}
+    SessionMenu {}
 }
