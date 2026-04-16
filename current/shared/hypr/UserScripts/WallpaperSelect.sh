@@ -183,6 +183,35 @@ apply_image_wallpaper() {
   # Run wallust (generates palette.conf + all color templates from wallpaper)
   "$SCRIPTSDIR/WallustSwww.sh" "$image_path"
 
+  # Auto-select best accent from generated palette (highest saturation)
+  python3 -c "
+import colorsys, re
+palette = {}
+for line in open('$HOME/.config/theme/palette.conf'):
+    m = re.match(r'^(\w+)=([0-9A-Fa-f]{6})\s*$', line.strip())
+    if m: palette[m.group(1)] = m.group(2)
+bg_l = colorsys.rgb_to_hls(*[int(palette.get('bg','000000')[i:i+2],16)/255 for i in (0,2,4)])[1]
+candidates = [(k, palette[k]) for k in ['red','green','yellow','blue','magenta','cyan','bright_red','bright_green','bright_yellow','bright_blue','bright_magenta','bright_cyan'] if k in palette]
+scored = []
+for name, h in candidates:
+    r,g,b = [int(h[i:i+2],16)/255 for i in (0,2,4)]
+    _, l, s = colorsys.rgb_to_hls(r, g, b)
+    gap = abs(l - bg_l)
+    if gap < 0.1: continue
+    scored.append((s * 2 + gap * 0.5, h, name))
+scored.sort(reverse=True)
+if scored:
+    # Write accent lines
+    import tempfile, shutil
+    p = '$HOME/.config/theme/palette.conf'
+    lines = open(p).readlines()
+    with open(p, 'w') as f:
+        for line in lines:
+            if not line.startswith('accent'): f.write(line)
+        f.write('accent=' + scored[0][1] + '\n')
+        f.write('accent_secondary=' + (scored[1][1] if len(scored)>1 else scored[0][1]) + '\n')
+" 2>/dev/null
+
   # Sync theme to all apps (quickshell, hyprland, kitty, etc.)
   "$HOME/.local/bin/theme" sync &
 
