@@ -22,14 +22,14 @@ Scope {
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
             exclusionMode: ExclusionMode.Ignore
-            anchors { top: true; right: true }
+            anchors { top: true; left: true; right: true }
             implicitWidth: NotificationService.count > 0 ? 400 : 0
 
 
             ColumnLayout {
                 id: notifCol
-                anchors { top: parent.top; right: parent.right; topMargin: 54; rightMargin: 12 }
-                width: 370; spacing: 10
+                anchors { top: parent.top; horizontalCenter: parent.horizontalCenter; topMargin: 54 }
+                width: 400; spacing: 10
 
                 Repeater {
                     model: NotificationService.notifications
@@ -102,7 +102,7 @@ Scope {
                                     Text {
                                         text: cardRoot.modelData.appName || "Notification"
                                         color: colors.fgMuted
-                                        font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold
+                                        font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14; font.weight: Font.Bold
                                         font.capitalization: Font.AllUppercase
                                         Layout.alignment: Qt.AlignVCenter
                                     }
@@ -131,7 +131,7 @@ Scope {
                                 Text {
                                     text: cardRoot.modelData.summary
                                     color: colors.fg
-                                    font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 15; font.weight: Font.Bold
+                                    font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 20; font.weight: Font.Bold
                                     elide: Text.ElideRight; Layout.fillWidth: true
                                     visible: text !== ""
                                 }
@@ -140,7 +140,7 @@ Scope {
                                 Text {
                                     text: cardRoot.modelData.body
                                     color: colors.fgDim
-                                    font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13
+                                    font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 16
                                     wrapMode: Text.Wrap; maximumLineCount: 5; elide: Text.ElideRight
                                     Layout.fillWidth: true; visible: text !== ""
                                     lineHeight: 1.3
@@ -180,7 +180,7 @@ Scope {
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: modelData.text; color: colors.accent
-                                                font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold
+                                                font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14; font.weight: Font.Bold
                                             }
                                             MouseArea {
                                                 id: actionMA; anchors.fill: parent; hoverEnabled: true

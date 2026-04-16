@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
@@ -33,7 +34,7 @@ Scope {
             required property var modelData
             screen: modelData
             Colors { id: colors }
-            visible: root.visible
+            visible: root.visible && Hyprland.focusedMonitor?.name === modelData.name
             color: "transparent"
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
