@@ -77,7 +77,13 @@ def main(path: str) -> None:
         ]:
             for k in pair:
                 f.write(f'{k}={palette.get(k, "000000")}\n')
-        f.write(f'\n# Accent\naccent={palette.get("accent", "7aa2f7")}\n')
+        # accent_seed = wallust raw pick (saturation-weighted dominant ANSI).
+        #   Used as matugen MD3 seed. Stable across theme syncs.
+        # accent = matugen MD3 primary derived from seed (or = seed if matugen
+        #   hasn't run yet). Final value consumed by all theme targets.
+        seed_val = palette.get("accent", "7aa2f7")
+        f.write(f'\n# Accent\naccent_seed={seed_val}\n')
+        f.write(f'accent={seed_val}\n')
         f.write(f'accent_secondary={palette.get("accent_secondary", "bb9af7")}\n')
         f.write(f'cursor={palette.get("cursor", fg)}\n')
         f.write(f'url={palette.get("url", palette.get("blue", "7aa2f7"))}\n')

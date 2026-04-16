@@ -42,57 +42,60 @@ if [[ -z "$WALLPAPER" || ! -f "$WALLPAPER" ]]; then
   return 0 2>/dev/null || exit 0
 fi
 
-# Use wallust-picked accent (palette.conf) as MD3 seed.
-# Wallust extracts the visually dominant color from the wallpaper (saturation-
-# weighted), then matugen derives all MD3 tonal roles around THAT seed via HCT.
-# Result: one unified hue family (accent + secondary + surfaces all share the
-# wallust-picked tone). Falls back to image-based scheme if no accent yet.
+# MD3 cache keyed by ACCENT HEX, not wallpaper path.
+# Matugen output is deterministic from seed color: same accent → same MD3.
+# This sidesteps multi-monitor focus confusion (different monitors may show
+# different wallpapers, but the wallpaper picker just wrote the right accent
+# into palette.conf — that's our source of truth).
 MATUGEN_CONFIG="$HOME/.config/matugen/config.toml"
 QS_JSON="$HOME/.local/state/quickshell/generated/colors.json"
-MD3_CACHE_DIR="$HOME/.cache/wallpaper-md3"
+MD3_CACHE_DIR="$HOME/.cache/matugen-by-accent"
 
-# Fast path: cp from per-wallpaper cache if available. Hash uses same scheme
-# as theme-cache-wallpapers / WallpaperSelect (md5 of full path, first 12 chars).
-hash=$(echo "$WALLPAPER" | md5sum | cut -c1-12)
-md3_cache="$MD3_CACHE_DIR/${hash}.json"
+# Read SEED (wallust raw pick, stable). Falls back to accent for old caches.
+seed=""
+if [[ -f "$PALETTE" ]]; then
+  seed=$(grep '^accent_seed=' "$PALETTE" | head -1 | cut -d= -f2 | tr -d ' \r\n#' | tr 'A-F' 'a-f')
+  if [[ -z "$seed" ]]; then
+    seed=$(grep '^accent=' "$PALETTE" | head -1 | cut -d= -f2 | tr -d ' \r\n#' | tr 'A-F' 'a-f')
+  fi
+fi
+
+if [[ -z "$seed" ]]; then
+  echo "  no accent_seed in palette.conf — skipping matugen"
+  return 0 2>/dev/null || exit 0
+fi
+
+md3_cache="$MD3_CACHE_DIR/${seed}.json"
 
 if [[ -f "$md3_cache" ]]; then
   mkdir -p "$(dirname "$QS_JSON")"
   cp "$md3_cache" "$QS_JSON"
-  source_label="cached"
+  source_label="cached: #$seed"
 else
-  seed=""
-  if [[ -f "$PALETTE" ]]; then
-    seed=$(grep '^accent=' "$PALETTE" | head -1 | cut -d= -f2 | tr -d ' \r\n')
-  fi
-
-  if [[ -n "$seed" ]]; then
-    if [[ -f "$MATUGEN_CONFIG" ]]; then
-      matugen color hex "#$seed" -c "$MATUGEN_CONFIG" 2>/dev/null
-    else
-      matugen color hex "#$seed" 2>/dev/null
-    fi
-    source_label="seed: #$seed"
+  if [[ -f "$MATUGEN_CONFIG" ]]; then
+    matugen color hex "#$seed" -c "$MATUGEN_CONFIG" 2>/dev/null
   else
-    if [[ -f "$MATUGEN_CONFIG" ]]; then
-      matugen image "$WALLPAPER" -c "$MATUGEN_CONFIG" 2>/dev/null
-    else
-      matugen image "$WALLPAPER" 2>/dev/null
-    fi
-    source_label="image: $(basename "$WALLPAPER")"
+    matugen color hex "#$seed" 2>/dev/null
   fi
+  source_label="seed: #$seed"
 
-  # Save freshly-generated JSON to cache for next time
+  # Save to per-accent cache
   if [[ -f "$QS_JSON" ]]; then
     mkdir -p "$MD3_CACHE_DIR"
     cp "$QS_JSON" "$md3_cache"
   fi
 fi
 
-# Update accent_secondary in palette.conf with matugen's harmonized secondary.
-# accent itself stays as wallust pick (the seed) — that's the source tone.
+# Replace palette.conf accent + accent_secondary with matugen's MD3-corrected
+# primary/secondary. wallust pick was the SEED (extracted dominant color) but
+# matugen normalizes lightness/contrast for dark mode — we want all consumers
+# (kitty/tmux/zen/gtk/Quickshell bar) using the same final hex.
 if [[ -f "$QS_JSON" && -f "$PALETTE" ]]; then
+  primary=$(python3 -c "import json,sys; print(json.load(open('$QS_JSON'))['md3'].get('primary','').lstrip('#'))" 2>/dev/null)
   secondary=$(python3 -c "import json,sys; print(json.load(open('$QS_JSON'))['md3'].get('secondary','').lstrip('#'))" 2>/dev/null)
+  if [[ -n "$primary" ]]; then
+    sed -i "s/^accent=.*/accent=$primary/" "$PALETTE"
+  fi
   if [[ -n "$secondary" ]]; then
     sed -i "s/^accent_secondary=.*/accent_secondary=$secondary/" "$PALETTE"
   fi

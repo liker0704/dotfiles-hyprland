@@ -6,7 +6,7 @@
 # Does NOT change current theme — only builds cache for instant Super+W switching.
 
 CACHE_DIR="$HOME/.cache/wallpaper-palettes"
-MD3_CACHE_DIR="$HOME/.cache/wallpaper-md3"
+MD3_CACHE_DIR="$HOME/.cache/matugen-by-accent"
 WALL_DIR="$HOME/Pictures/wallpapers"
 PALETTE="$HOME/.config/theme/palette.conf"
 MATUGEN_CONFIG="$HOME/.config/matugen/config.toml"
@@ -84,17 +84,24 @@ while read -r img; do
         cp "$GENERATED" "$cache_file"
     fi
 
-    # Matugen MD3 (if missing) — seeded by wallust accent for harmony
-    if $HAS_MATUGEN && ! $md3_done; then
-        seed=$(grep '^accent=' "$cache_file" | head -1 | cut -d= -f2 | tr -d ' \r\n')
+    # Matugen MD3 (cache keyed by seed, dedupes wallpapers with same accent)
+    if $HAS_MATUGEN; then
+        seed=$(grep '^accent_seed=' "$cache_file" | head -1 | cut -d= -f2 | tr -d ' \r\n#' | tr 'A-F' 'a-f')
+        # fallback to accent if accent_seed missing (older caches)
+        if [[ -z "$seed" ]]; then
+            seed=$(grep '^accent=' "$cache_file" | head -1 | cut -d= -f2 | tr -d ' \r\n#' | tr 'A-F' 'a-f')
+        fi
         if [[ -n "$seed" ]]; then
-            if [[ -f "$MATUGEN_CONFIG" ]]; then
-                matugen color hex "#$seed" -c "$MATUGEN_CONFIG" 2>/dev/null
-            else
-                matugen color hex "#$seed" 2>/dev/null
-            fi
-            if [[ -f "$MATUGEN_OUT" ]]; then
-                cp "$MATUGEN_OUT" "$md3_cache"
+            seed_cache="$MD3_CACHE_DIR/${seed}.json"
+            if [[ ! -f "$seed_cache" ]]; then
+                if [[ -f "$MATUGEN_CONFIG" ]]; then
+                    matugen color hex "#$seed" -c "$MATUGEN_CONFIG" 2>/dev/null
+                else
+                    matugen color hex "#$seed" 2>/dev/null
+                fi
+                if [[ -f "$MATUGEN_OUT" ]]; then
+                    cp "$MATUGEN_OUT" "$seed_cache"
+                fi
             fi
         fi
     fi
