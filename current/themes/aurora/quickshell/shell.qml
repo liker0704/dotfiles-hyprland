@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Hyprland
 import QtQuick
 import "notifications"
+import "osd"
 
 Scope {
     Variants {
@@ -14,6 +15,6 @@ Scope {
         }
     }
 
-    // Notification toasts (replaces swaync)
     NotificationPopup {}
+    OSD {}
 }
