@@ -41,15 +41,16 @@ def blend(c1: str, c2: str, ratio: float) -> str:
     )
 
 
-# Semantic hue targets (degrees, 0-360). Tolerance = acceptable deviation.
-# If wallust pick lands outside hue ± tol, we substitute with engineered color.
+# Canonical ANSI hue targets. Engineered colors land at these positions
+# (with small ±12° harmonization toward seed for cohesion).
+# Tolerance = how far wallust pick can deviate from target hue before fix.
 ANSI_TARGETS = {
-    'red':     (  0, 40),
-    'green':   (130, 45),
+    'red':     (  5, 35),
     'yellow':  ( 48, 22),
+    'green':   (130, 45),
+    'cyan':    (180, 25),
     'blue':    (215, 30),
     'magenta': (300, 35),
-    'cyan':    (180, 25),
 }
 
 
@@ -60,49 +61,72 @@ def hue_dist(h1_deg: float, h2_deg: float) -> float:
 
 def engineer_ansi(target_hue_deg: float, seed_hue_deg: float,
                   is_bright: bool, is_dark_bg: bool) -> str:
-    """Build a palette-coherent ANSI color: shift target hue slightly toward
-    seed (up to 12°) for tonal harmony, set sat/light per dark/light theme."""
-    # Tonal harmonization: pull target toward seed hue by 12° max
+    """Engineer an ANSI color at canonical hue, harmonized 12° toward seed.
+    Lightness/saturation tuned so:
+      - normal vs bright differ by ~0.10 L (visible distinction)
+      - all stay clear of black (L<0.3) and white (L>0.78)
+      - moderate saturation keeps hues distinct without neon glow."""
     dist = ((seed_hue_deg - target_hue_deg + 540) % 360) - 180
     shifted = (target_hue_deg + max(-12, min(12, dist))) % 360
 
     if is_dark_bg:
-        s = 0.60 if is_bright else 0.55
-        l = 0.70 if is_bright else 0.62
+        # Normal: L=0.55  Bright: L=0.65 (gap 0.10, far from white at ~0.85)
+        s = 0.55 if is_bright else 0.50
+        l = 0.65 if is_bright else 0.55
     else:
-        s = 0.65 if is_bright else 0.58
-        l = 0.35 if is_bright else 0.42
-
+        s = 0.60 if is_bright else 0.55
+        l = 0.38 if is_bright else 0.45
     return hls_to_hex(shifted / 360, l, s)
 
 
 def fix_ansi(palette: dict[str, str], seed_hex: str, is_dark_bg: bool) -> None:
     bg_hex = palette.get('bg', '000000')
+    fg_hex = palette.get('fg', 'ffffff')
     bg_l = hex_to_hls(bg_hex)[1]
+    fg_l = hex_to_hls(fg_hex)[1]
     seed_h = hex_to_hls(seed_hex)[0] * 360
+
+    # Forbidden lightness band: too close to bg or to fg/white
+    def lightness_ok(l: float) -> bool:
+        return abs(l - bg_l) > 0.22 and abs(l - fg_l) > 0.15
 
     finalized: set[str] = set()
 
     for name, (target_h, tol) in ANSI_TARGETS.items():
-        for is_bright, key in [(False, name), (True, f'bright_{name}')]:
+        # Process the PAIR (normal, bright) together so we can enforce
+        # bright > normal lightness gap (Fix 2).
+        normal_key = name
+        bright_key = f'bright_{name}'
+
+        # Validate normal first
+        for is_bright, key in [(False, normal_key), (True, bright_key)]:
             current = palette.get(key)
             needs_fix = True
             if current:
                 ch, cl, cs = hex_to_hls(current)
                 cur_h_deg = ch * 360
-                # Check 1: hue close to semantic target?
                 hue_ok = hue_dist(cur_h_deg, target_h) <= tol
-                # Check 2: enough contrast with bg?
-                contrast_ok = abs(cl - bg_l) > 0.18
-                # Check 3: saturation not too low (avoid muddy near-grays)?
-                sat_ok = cs > 0.15
-                # Check 4: not a duplicate of an already-kept color?
+                light_ok = lightness_ok(cl)
+                sat_ok = cs > 0.20
                 unique_ok = current.lower() not in finalized
-                if hue_ok and contrast_ok and sat_ok and unique_ok:
+                if hue_ok and light_ok and sat_ok and unique_ok:
                     needs_fix = False
             if needs_fix:
                 palette[key] = engineer_ansi(target_h, seed_h, is_bright, is_dark_bg)
             finalized.add(palette[key].lower())
+
+        # Fix 2: enforce bright is visibly brighter than normal (>0.06 L).
+        # If wallust gave both as same/dark, replace bright with engineered version.
+        n_l = hex_to_hls(palette[normal_key])[1]
+        b_l = hex_to_hls(palette[bright_key])[1]
+        if b_l - n_l < 0.06:
+            palette[bright_key] = engineer_ansi(target_h, seed_h, True, is_dark_bg)
+            # Re-engineer with explicit boost above normal_key's lightness
+            ch_b = hex_to_hls(palette[bright_key])[0]
+            new_l = min(0.78, n_l + 0.12)
+            palette[bright_key] = hls_to_hex(ch_b, new_l, 0.58)
+            finalized.discard(palette[bright_key].lower())  # don't block re-use
+            finalized.add(palette[bright_key].lower())
 
 
 def main(path: str) -> None:
@@ -146,6 +170,25 @@ def main(path: str) -> None:
     if scored:
         palette['accent'] = scored[0][1]
         palette['accent_secondary'] = scored[1][1] if len(scored) > 1 else scored[0][1]
+
+    # Fix 3: minimum-saturation guard. If best accent is washed out (<0.25),
+    # ALL wallust ANSI candidates are desaturated (e.g. monochrome wallpaper).
+    # Engineer accent at the same hue but with forced saturation.
+    if 'accent' in palette:
+        ah, al, as_ = hex_to_hls(palette['accent'])
+        if as_ < 0.25:
+            target_h = ah if as_ > 0.05 else hex_to_hls(bg)[0]
+            new_l = max(0.55, al) if bg_l < 0.5 else min(0.45, al)
+            palette['accent'] = hls_to_hex(target_h, new_l, 0.55)
+
+    # Fix 1: contrast guard. Even after best pick + saturation boost, the
+    # accent's lightness may sit too close to bg. Force a 0.55 L gap toward
+    # the readable end (light for dark theme, dark for light).
+    if 'accent' in palette:
+        ah, al, as_ = hex_to_hls(palette['accent'])
+        if abs(al - bg_l) < 0.30:
+            new_l = min(0.78, bg_l + 0.55) if bg_l < 0.5 else max(0.25, bg_l - 0.55)
+            palette['accent'] = hls_to_hex(ah, new_l, max(as_, 0.40))
 
     # Smart ANSI fallback — fix wrong-hue / near-bg / duplicate slots
     seed_hex = palette.get('accent', '7aa2f7')

@@ -99,14 +99,46 @@ fi
 # matugen normalizes lightness/contrast for dark mode — we want all consumers
 # (kitty/tmux/zen/gtk/Quickshell bar) using the same final hex.
 if [[ -f "$QS_JSON" && -f "$PALETTE" ]]; then
-  primary=$(python3 -c "import json,sys; print(json.load(open('$QS_JSON'))['md3'].get('primary','').lstrip('#'))" 2>/dev/null)
-  secondary=$(python3 -c "import json,sys; print(json.load(open('$QS_JSON'))['md3'].get('secondary','').lstrip('#'))" 2>/dev/null)
-  if [[ -n "$primary" ]]; then
-    sed -i "s/^accent=.*/accent=$primary/" "$PALETTE"
-  fi
-  if [[ -n "$secondary" ]]; then
-    sed -i "s/^accent_secondary=.*/accent_secondary=$secondary/" "$PALETTE"
-  fi
+  # Pull all relevant MD3 fields + apply Fix 1 (accent contrast boost)
+  read -r primary secondary bg bg_light bg_highlight fg fg_dim fg_muted border < <(python3 -c "
+import json, colorsys
+d = json.load(open('$QS_JSON'))['md3']
+def s(k): return d.get(k, '').lstrip('#')
+def L(h):
+    r,g,b = [int(h[i:i+2],16)/255 for i in (0,2,4)]
+    return colorsys.rgb_to_hls(r,g,b)[1]
+
+primary, secondary = s('primary'), s('secondary')
+bg_v = s('surface'); fg_v = s('on_surface')
+
+# Fix 1: if accent vs surface contrast is too low, boost lightness toward
+# the readable end (light for dark theme, dark for light theme).
+if primary and bg_v:
+    bg_l = L(bg_v); pl = L(primary)
+    if abs(pl - bg_l) < 0.30:
+        ph = colorsys.rgb_to_hls(*[int(primary[i:i+2],16)/255 for i in (0,2,4)])[0]
+        ps = colorsys.rgb_to_hls(*[int(primary[i:i+2],16)/255 for i in (0,2,4)])[2]
+        new_l = min(0.78, bg_l + 0.55) if bg_l < 0.5 else max(0.25, bg_l - 0.55)
+        r,g,b = colorsys.hls_to_rgb(ph, new_l, max(ps, 0.40))
+        primary = ''.join(f'{int(c*255):02x}' for c in (r,g,b))
+
+print(primary, secondary,
+      bg_v, s('surface_container_low'), s('surface_container_high'),
+      fg_v, s('on_surface_variant'),
+      s('outline'), s('outline_variant'))
+" 2>/dev/null)
+
+  # Testing: bg/fg also from matugen. Revert to wallust later if it hurts
+  # readability or looks too "designed" for terminal use.
+  for kv in "accent=$primary" "accent_secondary=$secondary" \
+            "bg=$bg" "fg=$fg" \
+            "bg_light=$bg_light" "bg_highlight=$bg_highlight" \
+            "fg_dim=$fg_dim" "fg_muted=$fg_muted" "border=$border"; do
+    key="${kv%%=*}"; val="${kv#*=}"
+    [[ -z "$val" ]] && continue
+    sed -i "s/^${key}=.*/${key}=${val}/" "$PALETTE"
+    C[$key]="$val"
+  done
 fi
 
 echo -e "  \033[0;32mmatugen\033[0m ($source_label)"
