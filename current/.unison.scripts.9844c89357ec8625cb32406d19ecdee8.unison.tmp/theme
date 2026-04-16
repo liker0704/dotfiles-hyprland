@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# theme — unified desktop color + font management
+# Modules: ~/.local/share/theme/{lib,commands,targets}
+
+THEME_DIR="$HOME/.local/share/theme"
+source "$THEME_DIR/lib/config.sh"
+source "$THEME_DIR/lib/output.sh"
+
+case "${1:-}" in
+  set)        shift; source "$THEME_DIR/commands/set.sh";        cmd_set "$@" ;;
+  search)     shift; source "$THEME_DIR/commands/search.sh";     cmd_search "$@" ;;
+  list)       shift; source "$THEME_DIR/commands/list.sh";       cmd_list "$@" ;;
+  dark)       shift; source "$THEME_DIR/commands/search.sh";     cmd_search --dark "$@" ;;
+  light)      shift; source "$THEME_DIR/commands/search.sh";     cmd_search --light "$@" ;;
+  generate)   shift; source "$THEME_DIR/commands/generate.sh";   cmd_generate "$@" ;;
+  random)     shift; source "$THEME_DIR/commands/random.sh";     cmd_random "$@" ;;
+  save)       shift; source "$THEME_DIR/commands/save.sh";       cmd_save "$@" ;;
+  remove)     shift; source "$THEME_DIR/commands/remove.sh";     cmd_remove "$@" ;;
+  font)       shift; source "$THEME_DIR/commands/font.sh";       cmd_font "$@" ;;
+  fav)        shift; source "$THEME_DIR/commands/fav.sh";        cmd_fav "$@" ;;
+  sync)       source "$THEME_DIR/commands/sync.sh";              apply_palette ;;
+  import)     shift; source "$THEME_DIR/commands/import.sh";     cmd_import "$@" ;;
+  update)     source "$THEME_DIR/lib/cache.sh";                  cmd_update ;;
+  current)    source "$THEME_DIR/commands/current.sh";           cmd_current ;;
+  animations) shift; source "$THEME_DIR/commands/animations.sh"; cmd_animations "$@" ;;
+  backup)     source "$THEME_DIR/commands/backup.sh";            cmd_backup ;;
+  help|-h|--help) source "$THEME_DIR/commands/help.sh";          cmd_help ;;
+  "")         source "$THEME_DIR/commands/current.sh"; source "$THEME_DIR/commands/help.sh"; cmd_default ;;
+  *)          echo -e "${RED}Unknown command: $1${RESET}"; echo "Run 'theme help' for usage"; exit 1 ;;
+esac

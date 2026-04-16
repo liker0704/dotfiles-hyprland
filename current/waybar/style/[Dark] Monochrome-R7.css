@@ -1,0 +1,291 @@
+/* Monochrome R7-style Waybar Theme */
+/* Based on R7rainz dotfiles + Windows11-ricing colors */
+
+/* --- Global Styles --- */
+* {
+  font-family: "JetBrainsMono Nerd Font", "NotoSans Nerd Font", sans-serif;
+  font-size: 13px;
+  min-height: 0;
+  padding-right: 0px;
+  padding-left: 0px;
+  padding-bottom: 0px;
+}
+
+/* --- Waybar Container --- */
+#waybar {
+  background: transparent;
+  color: #e5e7eb;
+  margin: 0px;
+  font-weight: 500;
+}
+
+/* --- Left Modules (Individual Rounded Blocks) --- */
+#workspaces,
+#custom-cava_mviz,
+#custom-playerctl,
+#hyprland-window,
+#custom-uptime,
+#cpu {
+  background-color: #18181b;
+  padding: 0.3rem 0.7rem;
+  margin: 5px 0px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  min-width: 0;
+  border: none;
+  transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+#workspaces {
+  padding: 2px;
+  margin-left: 7px;
+  margin-right: 5px;
+}
+
+#custom-uptime {
+  margin-right: 5px;
+  color: #71717a;
+}
+
+/* Hover effects */
+#custom-uptime:hover,
+#cpu:hover,
+#hyprland-window:hover {
+  background-color: #27272a;
+}
+
+/* --- Workspaces --- */
+#workspaces button {
+  color: #71717a;
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  background: transparent;
+  transition: all 0.2s ease-in-out;
+  border: none;
+  outline: none;
+}
+
+#workspaces button.active {
+  color: #18181b;
+  background-color: #ffffff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+}
+
+#workspaces button:hover {
+  background: #27272a;
+  color: #e5e7eb;
+}
+
+#workspaces button.urgent {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+/* --- Center Modules --- */
+#clock {
+  background-color: #18181b;
+  padding: 0.3rem 0.7rem;
+  margin: 5px 0px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  min-width: 0;
+  border: none;
+  color: #ffffff;
+  font-weight: 600;
+  transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+#clock:hover {
+  background-color: #27272a;
+}
+
+/* --- Right Modules (Seamless Bar) --- */
+#tray,
+#network,
+#bluetooth,
+#pulseaudio,
+#backlight,
+#battery,
+#custom-swaync,
+#custom-nightlight,
+#custom-power {
+  background-color: #18181b;
+  padding: 0.3rem 0.7rem;
+  margin: 5px 0px;
+  border-radius: 0;
+  box-shadow: none;
+  min-width: 0;
+  border: none;
+  color: #e5e7eb;
+  transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+/* First module - left radius */
+#tray {
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+  margin-left: 5px;
+}
+
+/* Last module - right radius */
+#custom-power {
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+  margin-right: 7px;
+}
+
+/* Hover effects for right modules */
+#tray:hover,
+#network:hover,
+#bluetooth:hover,
+#pulseaudio:hover,
+#backlight:hover,
+#battery:hover,
+#custom-swaync:hover,
+#custom-nightlight:hover,
+#custom-power:hover {
+  background-color: #27272a;
+}
+
+/* --- Individual module colors --- */
+#cpu {
+  color: #a1a1aa;
+}
+
+#network {
+  color: #e5e7eb;
+}
+
+#network.disconnected {
+  color: #ef4444;
+}
+
+#bluetooth {
+  color: #71717a;
+  font-size: 16px;
+}
+
+#bluetooth.on {
+  color: #a1a1aa;
+}
+
+#bluetooth.connected {
+  color: #ffffff;
+}
+
+#pulseaudio {
+  color: #e5e7eb;
+}
+
+#pulseaudio.muted {
+  color: #52525b;
+}
+
+#backlight {
+  color: #e5e7eb;
+}
+
+#battery {
+  color: #e5e7eb;
+}
+
+#battery.charging {
+  color: #a1a1aa;
+}
+
+#battery.warning:not(.charging) {
+  color: #ef4444;
+  animation: blink 1s steps(12) infinite alternate;
+}
+
+#battery.critical:not(.charging) {
+  color: #dc2626;
+  animation: blink 0.5s steps(12) infinite alternate;
+}
+
+@keyframes blink {
+  to {
+    color: #18181b;
+  }
+}
+
+/* --- Custom modules --- */
+#custom-swaync {
+  color: #a1a1aa;
+}
+
+#custom-nightlight {
+  color: #71717a;
+}
+
+#custom-power {
+  color: #71717a;
+}
+
+#custom-power:hover {
+  color: #ef4444;
+}
+
+/* Hyprland window title */
+#hyprland-window {
+  color: #a1a1aa;
+}
+
+/* --- Groups --- */
+#group-laptop,
+#group-mobo_drawer,
+#group-audio,
+#group-status {
+  background-color: #18181b;
+  border-radius: 8px;
+  margin: 5px 2px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* --- Tooltip Styles --- */
+tooltip {
+  background-color: #18181b;
+  color: #e5e7eb;
+  padding: 8px 14px;
+  margin: 5px 0px;
+  border-radius: 8px;
+  border: 1px solid #3f3f46;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+}
+
+tooltip label {
+  color: #e5e7eb;
+}
+
+/* --- Media/Cava visualizer --- */
+#custom-cava_mviz {
+  color: #71717a;
+  margin-left: 5px;
+}
+
+#custom-playerctl {
+  color: #a1a1aa;
+}
+
+/* --- Idle inhibitor --- */
+#idle_inhibitor {
+  background-color: #18181b;
+  padding: 0.3rem 0.7rem;
+  margin: 5px 2px;
+  border-radius: 8px;
+  color: #71717a;
+}
+
+#idle_inhibitor.activated {
+  color: #ffffff;
+}
+
+/* --- Weather --- */
+#custom-weather {
+  background-color: #18181b;
+  padding: 0.3rem 0.7rem;
+  margin: 5px 2px;
+  border-radius: 8px;
+  color: #a1a1aa;
+}

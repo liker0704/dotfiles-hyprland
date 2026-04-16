@@ -1,0 +1,760 @@
+#!/usr/bin/env bash
+# Second PC management — sync, copy, connect
+# Usage: pc <command> [args]
+
+set -euo pipefail
+
+# Load config
+PC_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/pc/config"
+if [[ ! -f "$PC_CONFIG" ]]; then
+    echo "Missing config: $PC_CONFIG"
+    echo "Create it with: PC_HOST, PC_USER, PC_VNC_PORT"
+    exit 1
+fi
+source "$PC_CONFIG"
+
+PC2="${PC_USER}@${PC_HOST}"
+LOCAL_USER="$(whoami)"
+PRF="$HOME/.unison/projects.prf"
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+sync_profile() {
+    local profile="$1"
+    local label="$2"
+    local retries=3
+    echo -e "${CYAN}→ Syncing ${label}...${NC}"
+    for i in $(seq 1 $retries); do
+        if unison "$profile" -batch 2>&1; then
+            echo -e "${GREEN}  ✓ ${label} synced${NC}"
+            return 0
+        fi
+        if [[ $i -lt $retries ]]; then
+            echo -e "${YELLOW}  ↻ Retry $((i+1))/$retries (file changed during sync)...${NC}"
+            sleep 1
+        fi
+    done
+    echo -e "${YELLOW}  ⚠ ${label} failed after $retries attempts${NC}"
+    return 1
+}
+
+sync_claude() {
+    local local_dir="$HOME/.claude/projects"
+    local remote_dir="/home/${PC_USER}/.claude/projects"
+    local local_prefix="-home-${LOCAL_USER}"
+    local remote_prefix="-home-${PC_USER}"
+    local rsync_flag="--update"
+    [[ "$SYNC_KEEP" == "1" ]] && rsync_flag="--ignore-existing"
+    local local_home="/home/${LOCAL_USER}"
+    local remote_home="/home/${PC_USER}"
+
+    echo -e "${CYAN}→ Syncing Claude dialogs (with path translation)...${NC}"
+
+    # Push: local dirs → remote (sequential, reliable)
+    local push_count=0
+    for dir in "$local_dir"/${local_prefix} "$local_dir"/${local_prefix}-*; do
+        [[ -d "$dir" ]] || continue
+        local bname="$(basename "$dir")"
+        local rname="${bname/$local_prefix/$remote_prefix}"
+        rsync -az $rsync_flag "$dir/" "$PC2:${remote_dir}/${rname}/" 2>/dev/null || true
+        push_count=$((push_count + 1))
+    done
+
+    # Pull: list remote dirs, then rsync each
+    local pull_count=0
+    local remote_dirs
+    remote_dirs=$(ssh "$PC2" "ls -d ${remote_dir}/${remote_prefix} ${remote_dir}/${remote_prefix}-* 2>/dev/null" 2>/dev/null) || true
+    while IFS= read -r rdir; do
+        [[ -z "$rdir" ]] && continue
+        local bname="$(basename "$rdir")"
+        local lname="${bname/$remote_prefix/$local_prefix}"
+        rsync -az $rsync_flag "$PC2:${rdir}/" "${local_dir}/${lname}/" 2>/dev/null || true
+        pull_count=$((pull_count + 1))
+    done <<< "$remote_dirs"
+
+    # Path translation: only fix files that actually need it
+    # Local: replace /home/liker2/ → /home/liker/ in pulled files
+    local fixed=0
+    while IFS= read -r f; do
+        local mt
+        mt=$(stat -c %Y "$f")
+        sed -i "s|${remote_home}/|${local_home}/|g" "$f"
+        touch -d @"$mt" "$f"
+        fixed=$((fixed + 1))
+    done < <(grep -rl "${remote_home}/" "$local_dir" --include="*.jsonl" 2>/dev/null)
+
+    # Remote: replace /home/liker/ → /home/liker2/ in pushed files
+    ssh "$PC2" "
+        for f in \$(grep -rl '${local_home}/' '${remote_dir}' --include='*.jsonl' 2>/dev/null); do
+            mt=\$(stat -c %Y \"\$f\")
+            sed -i 's|${local_home}/|${remote_home}/|g' \"\$f\"
+            touch -d @\"\$mt\" \"\$f\"
+        done
+    " 2>/dev/null || true
+
+    echo -e "${GREEN}  ✓ Claude dialogs synced (${push_count} push, ${pull_count} pull, ${fixed} translated)${NC}"
+}
+
+sync_tmux() {
+    local local_dir="$HOME/.local/share/tmux/resurrect"
+    local remote_dir="/home/${PC_USER}/.local/share/tmux/resurrect"
+    local tmp_dir="/tmp/pc-tmux-sync-$$"
+
+    echo -e "${CYAN}→ Syncing tmux sessions (with path translation)...${NC}"
+
+    # Push: copy local files, replace paths, send to remote
+    mkdir -p "$tmp_dir"
+    for f in "$local_dir"/*; do
+        [[ -f "$f" ]] || continue
+        sed "s|/home/${LOCAL_USER}/|/home/${PC_USER}/|g" "$f" > "$tmp_dir/$(basename "$f")"
+    done
+    local rsync_flag="--update"
+    [[ "$SYNC_KEEP" == "1" ]] && rsync_flag="--ignore-existing"
+    rsync -az $rsync_flag "$tmp_dir/" "$PC2:${remote_dir}/" 2>/dev/null || true
+
+    # Pull: get remote files, replace paths, save locally
+    rm -rf "$tmp_dir"
+    mkdir -p "$tmp_dir"
+    rsync -az "$PC2:${remote_dir}/" "$tmp_dir/" 2>/dev/null || true
+    for f in "$tmp_dir"/*; do
+        [[ -f "$f" ]] || continue
+        local basename="$(basename "$f")"
+        sed "s|/home/${PC_USER}/|/home/${LOCAL_USER}/|g" "$f" > "${local_dir}/${basename}"
+    done
+    rm -rf "$tmp_dir"
+
+    echo -e "${GREEN}  ✓ tmux sessions synced${NC}"
+}
+
+check_conn() {
+    if ! ssh -o ConnectTimeout=3 -q "$PC2" exit 2>/dev/null; then
+        echo -e "${YELLOW}✗ Second PC not reachable${NC}"
+        exit 1
+    fi
+}
+
+get_project() {
+    local current="$(pwd)"
+    local rel="${current#$HOME/projects/}"
+    if [[ "$rel" == "$current" ]]; then
+        echo -e "${YELLOW}Not inside ~/projects${NC}" >&2
+        exit 1
+    fi
+    echo "${rel%%/*}"
+}
+
+cmd="${1:-help}"
+shift 2>/dev/null || true
+
+case "$cmd" in
+    # --- Connect ---
+    ssh)
+        exec ssh "$PC2" "$@"
+        ;;
+    vnc|rdp)
+        exec xfreerdp3 /v:"${PC_HOST}" /u:"${PC_USER}" /p:"${PC_USER}" /dynamic-resolution /f /sound +clipboard /cert:ignore
+        ;;
+    tmux)
+        exec ssh -t "$PC2" tmux attach "$@"
+        ;;
+
+    # --- Sync ---
+    sync)
+        check_conn
+        SYNC_KEEP=0
+        # Parse flags
+        while [[ "${1:-}" == -* ]]; do
+            case "$1" in
+                --keep|-k) SYNC_KEEP=1; shift ;;
+                *) shift ;;
+            esac
+        done
+        export SYNC_KEEP
+        target="${1:-projects}"
+        case "$target" in
+            projects|p) sync_profile projects "~/projects" ;;
+            claude|c)   sync_claude ;;
+            tmux|t)     sync_tmux ;;
+            all|a)
+                sync_profile projects "~/projects" || true
+                sync_claude
+                sync_tmux
+                ;;
+            *) echo "Usage: pc sync [-k|--keep] [projects|claude|tmux|all]" ;;
+        esac
+        ;;
+    status)
+        check_conn
+        echo -e "${CYAN}Checking what's out of sync...${NC}"
+
+        echo -e "\n${YELLOW}projects:${NC}"
+        output=$(echo n | unison projects -ui text -dumbtty 2>&1 | grep -E "new|changed|deleted|---->|<----|<-?->") || true
+        if [[ -z "$output" ]]; then
+            echo "  (in sync)"
+        else
+            echo "$output"
+        fi
+
+        echo -e "\n${YELLOW}claude:${NC}"
+        claude_local="$HOME/.claude/projects"
+        claude_remote="/home/${PC_USER}/.claude/projects"
+        claude_local_prefix="-home-${LOCAL_USER}"
+        claude_remote_prefix="-home-${PC_USER}"
+        claude_diff=""
+        # Check local-only dirs
+        for dir in "$claude_local"/${claude_local_prefix} "$claude_local"/${claude_local_prefix}-*; do
+            [[ -d "$dir" ]] || continue
+            bname="$(basename "$dir")"
+            rname="${bname/$claude_local_prefix/$claude_remote_prefix}"
+            if ! ssh -q "$PC2" "test -d '${claude_remote}/${rname}'" 2>/dev/null; then
+                claude_diff+="  → ${bname} (local only)\n"
+            else
+                lcount=$(find "$dir" -type f | wc -l)
+                rcount=$(ssh -q "$PC2" "find '${claude_remote}/${rname}' -type f | wc -l" 2>/dev/null) || rcount=0
+                if [[ "$lcount" != "$rcount" ]]; then
+                    claude_diff+="  ↔ ${bname} (local: ${lcount} files, remote: ${rcount} files)\n"
+                fi
+            fi
+        done
+        # Check remote-only dirs
+        remote_claude=$(ssh -q "$PC2" "ls -d ${claude_remote}/${claude_remote_prefix} ${claude_remote}/${claude_remote_prefix}-* 2>/dev/null" 2>/dev/null) || true
+        while IFS= read -r rdir; do
+            [[ -z "$rdir" ]] && continue
+            bname="$(basename "$rdir")"
+            lname="${bname/$claude_remote_prefix/$claude_local_prefix}"
+            if [[ ! -d "${claude_local}/${lname}" ]]; then
+                claude_diff+="  ← ${bname} (remote only)\n"
+            fi
+        done <<< "$remote_claude"
+        if [[ -z "$claude_diff" ]]; then
+            echo "  (in sync)"
+        else
+            echo -e "$claude_diff"
+        fi
+
+        echo -e "\n${YELLOW}tmux:${NC}"
+        tmux_local="$HOME/.local/share/tmux/resurrect"
+        tmux_remote="/home/${PC_USER}/.local/share/tmux/resurrect"
+        lfiles=$(find "$tmux_local" -type f -name "*.txt" 2>/dev/null | wc -l)
+        rfiles=$(ssh -q "$PC2" "find '${tmux_remote}' -type f -name '*.txt' 2>/dev/null | wc -l") || rfiles=0
+        if [[ "$lfiles" == "$rfiles" ]]; then
+            echo "  (in sync — ${lfiles} files)"
+        else
+            echo "  ↔ local: ${lfiles} files, remote: ${rfiles} files"
+        fi
+        ;;
+
+    # --- Copy ---
+    copy)
+        check_conn
+        direction="to"
+        if [[ "${1:-}" == "--from" || "${1:-}" == "-f" ]]; then
+            direction="from"
+            shift
+        fi
+        if [[ -z "${1:-}" ]]; then
+            echo "Usage: pc copy [--from] <path>"
+            exit 1
+        fi
+        input="$1"
+        if [[ "$input" = /* ]]; then
+            abs_path="$input"
+        else
+            abs_path="$(pwd)/$input"
+        fi
+        abs_path="$(realpath -m "$abs_path")"
+        local_user="$(whoami)"
+        remote_path="${abs_path/\/home\/${local_user}\//\/home\/${PC_USER}\/}"
+
+        if [[ "$direction" == "to" ]]; then
+            remote_dir="$(dirname "$remote_path")"
+            ssh "$PC2" "mkdir -p '$remote_dir'"
+            if [[ -d "$abs_path" ]]; then
+                rsync -avz "$abs_path/" "$PC2:$remote_path/"
+            else
+                rsync -avz "$abs_path" "$PC2:$remote_path"
+            fi
+            echo -e "${GREEN}→ Copied to PC2: $remote_path${NC}"
+        else
+            local_dir="$(dirname "$abs_path")"
+            mkdir -p "$local_dir"
+            if ssh "$PC2" "test -d '$remote_path'" 2>/dev/null; then
+                rsync -avz "$PC2:$remote_path/" "$abs_path/"
+            else
+                rsync -avz "$PC2:$remote_path" "$abs_path"
+            fi
+            echo -e "${GREEN}← Copied from PC2: $abs_path${NC}"
+        fi
+        ;;
+
+    # --- Backup ---
+    backup)
+        local backup_dir="$HOME/.claude/backup"
+        subcmd="${1:-help}"
+        case "$subcmd" in
+            apply)
+                if [[ ! -d "$backup_dir" ]] || [[ -z "$(ls -A "$backup_dir" 2>/dev/null)" ]]; then
+                    echo -e "${YELLOW}No backup found${NC}"
+                    exit 1
+                fi
+                # Restore backed up files to their original locations
+                local restored=0
+                while IFS= read -r -d '' f; do
+                    local rel="${f#$backup_dir/}"
+                    local dest="$HOME/.claude/projects/$rel"
+                    mkdir -p "$(dirname "$dest")"
+                    cp "$f" "$dest"
+                    ((restored++))
+                done < <(find "$backup_dir" -type f -print0)
+                echo -e "${GREEN}✓ Restored $restored files from backup${NC}"
+                ;;
+            ls)
+                if [[ ! -d "$backup_dir" ]] || [[ -z "$(ls -A "$backup_dir" 2>/dev/null)" ]]; then
+                    echo -e "${YELLOW}No backup found${NC}"
+                else
+                    echo -e "${CYAN}Backed up files:${NC}"
+                    find "$backup_dir" -type f | sed "s|$backup_dir/||"
+                fi
+                ;;
+            clear)
+                rm -rf "$backup_dir"
+                echo -e "${GREEN}✓ Backup cleared${NC}"
+                ;;
+            *)
+                echo "Usage: pc backup <command>"
+                echo "  apply  - restore backed up Claude dialogs"
+                echo "  ls     - list backed up files"
+                echo "  clear  - delete backup"
+                ;;
+        esac
+        ;;
+
+    # --- Ignore/Include ---
+    ignore)
+        project="$(get_project)"
+        if grep -q "ignore = Path ${project}$" "$PRF" 2>/dev/null; then
+            echo -e "${YELLOW}Already ignored: ${project}${NC}"
+        else
+            echo "ignore = Path ${project}" >> "$PRF"
+            echo -e "${GREEN}✓ Added to ignore: ${project}${NC}"
+        fi
+        ;;
+    unignore)
+        project="$(get_project)"
+        if grep -q "ignore = Path ${project}$" "$PRF" 2>/dev/null; then
+            sed -i "\|ignore = Path ${project}$|d" "$PRF"
+            echo -e "${GREEN}✓ Removed from ignore: ${project}${NC}"
+        else
+            echo -e "${YELLOW}Not in ignore list: ${project}${NC}"
+        fi
+        ;;
+    include)
+        check_conn
+        direction="to"
+        if [[ "${1:-}" == "--from" || "${1:-}" == "-f" ]]; then
+            direction="from"
+            shift
+        fi
+        project="$(get_project)"
+        if [[ "$direction" == "to" ]]; then
+            echo -e "${CYAN}→ Pushing ${project} (all files, no ignores)...${NC}"
+            rsync -avz --delete \
+                "$HOME/projects/${project}/" \
+                "$PC2:~/projects/${project}/"
+            echo -e "${GREEN}→ ${project} pushed to PC2 (all files)${NC}"
+        else
+            echo -e "${CYAN}← Pulling ${project} (all files, no ignores)...${NC}"
+            rsync -avz --delete \
+                "$PC2:~/projects/${project}/" \
+                "$HOME/projects/${project}/"
+            echo -e "${GREEN}← ${project} pulled from PC2 (all files)${NC}"
+        fi
+        ;;
+    ls)
+        echo -e "${CYAN}Ignored projects:${NC}"
+        grep "ignore = Path " "$PRF" 2>/dev/null | sed 's/ignore = Path /  /' || echo "  (none)"
+        echo -e "\n${CYAN}Ignored patterns:${NC}"
+        grep "ignore = Name " "$PRF" 2>/dev/null | sed 's/ignore = Name /  /' || echo "  (none)"
+        ;;
+
+    # --- Init ---
+    init)
+        echo -e "${CYAN}Generating Unison profiles from templates...${NC}"
+        tpl_dir="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles-hyprland/current/unison"
+        # Also check dotfiles repo
+        for d in "$HOME/projects/dotfiles-hyprland/current/unison" "$tpl_dir"; do
+            [[ -d "$d" ]] && tpl_dir="$d" && break
+        done
+        if [[ ! -d "$tpl_dir" ]]; then
+            echo -e "${YELLOW}No templates found${NC}"
+            exit 1
+        fi
+        mkdir -p "$HOME/.unison"
+        remote_home="/home/${PC_USER}"
+        for tpl in "$tpl_dir"/*.prf.tpl; do
+            [[ -f "$tpl" ]] || continue
+            name="$(basename "$tpl" .tpl)"
+            sed -e "s|{{HOME}}|$HOME|g" \
+                -e "s|{{PC_USER}}|$PC_USER|g" \
+                -e "s|{{PC_HOST}}|$PC_HOST|g" \
+                -e "s|{{REMOTE_HOME}}|$remote_home|g" \
+                "$tpl" > "$HOME/.unison/$name"
+            echo -e "${GREEN}  ✓ ~/.unison/$name${NC}"
+        done
+        echo -e "${GREEN}Done. Run 'pc sync' to start syncing.${NC}"
+        ;;
+
+    # --- Session Transfer ---
+    session)
+        subcmd="${1:-help}"
+        shift 2>/dev/null || true
+        case "$subcmd" in
+            save)
+                manifest="$HOME/.config/pc/session-manifest.json"
+                mkdir -p "$(dirname "$manifest")"
+                echo -e "${CYAN}→ Capturing tmux sessions...${NC}"
+
+                # Build manifest: for each tmux pane, capture layout + detect claude sessionId
+                python3 - "$manifest" <<'PYEOF'
+import subprocess, json, sys, os
+
+manifest_path = sys.argv[1]
+local_user = os.environ.get("USER", "liker")
+home = os.path.expanduser("~")
+
+# Get all tmux panes
+result = subprocess.run(
+    ["tmux", "list-panes", "-a", "-F",
+     "#{session_name}\t#{window_index}\t#{window_name}\t#{pane_index}\t#{pane_current_path}\t#{pane_pid}"],
+    capture_output=True, text=True
+)
+if result.returncode != 0:
+    print("  No tmux server running")
+    sys.exit(1)
+
+# Get all window layouts
+layouts = {}
+wl = subprocess.run(
+    ["tmux", "list-windows", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_layout}"],
+    capture_output=True, text=True
+)
+for line in wl.stdout.strip().split("\n"):
+    if not line: continue
+    parts = line.split("\t")
+    layouts[f"{parts[0]}:{parts[1]}"] = parts[2]
+
+# Load history.jsonl for session mapping
+history = {}
+history_file = os.path.join(home, ".claude", "history.jsonl")
+if os.path.exists(history_file):
+    with open(history_file) as f:
+        for line in f:
+            try:
+                d = json.loads(line)
+                sid = d.get("sessionId", "")
+                proj = d.get("project", "")
+                ts = d.get("timestamp", 0)
+                if sid and proj:
+                    if proj not in history:
+                        history[proj] = {}
+                    if sid not in history[proj] or ts > history[proj][sid]:
+                        history[proj][sid] = ts
+            except json.JSONDecodeError:
+                continue
+
+# Process panes
+sessions = {}
+for line in result.stdout.strip().split("\n"):
+    if not line: continue
+    parts = line.split("\t")
+    sess, win_idx, win_name, pane_idx, cwd, shell_pid = parts
+
+    if sess not in sessions:
+        sessions[sess] = {"windows": {}}
+
+    win_key = win_idx
+    if win_key not in sessions[sess]["windows"]:
+        sessions[sess]["windows"][win_key] = {
+            "name": win_name,
+            "layout": layouts.get(f"{sess}:{win_idx}", ""),
+            "panes": []
+        }
+
+    # Detect if this pane runs claude (child process or pane process itself)
+    is_claude = False
+    session_id = None
+    try:
+        children = subprocess.run(
+            ["pgrep", "-P", shell_pid, "-x", "claude"],
+            capture_output=True, text=True
+        )
+        if children.returncode == 0 and children.stdout.strip():
+            is_claude = True
+        else:
+            proc_name = subprocess.run(
+                ["ps", "-p", shell_pid, "-o", "comm="],
+                capture_output=True, text=True
+            )
+            if proc_name.stdout.strip() == "claude":
+                is_claude = True
+    except Exception:
+        pass
+
+    if is_claude:
+        # Find sessionId: get recent sessions for this project from history
+        proj_sessions = history.get(cwd, {})
+        if proj_sessions:
+            # Track which sessions are already assigned to other panes in this cwd
+            assigned = set()
+            for w in sessions[sess]["windows"].values():
+                for p in w["panes"]:
+                    if p.get("session_id"):
+                        assigned.add(p["session_id"])
+            # Also check other tmux sessions
+            for s in sessions.values():
+                for w in s["windows"].values():
+                    for p in w["panes"]:
+                        if p.get("session_id"):
+                            assigned.add(p["session_id"])
+
+            # Pick most recent unassigned session for this project
+            available = {s: t for s, t in proj_sessions.items() if s not in assigned}
+            if available:
+                session_id = max(available, key=available.get)
+            elif proj_sessions:
+                session_id = max(proj_sessions, key=proj_sessions.get)
+
+    pane_info = {
+        "index": pane_idx,
+        "cwd": cwd,
+        "type": "claude" if is_claude else "shell",
+    }
+    if session_id:
+        pane_info["session_id"] = session_id
+
+    sessions[sess]["windows"][win_key]["panes"].append(pane_info)
+
+# Convert to list format
+manifest = []
+for sess_name, sess_data in sessions.items():
+    windows = []
+    for win_idx in sorted(sess_data["windows"].keys(), key=int):
+        w = sess_data["windows"][win_idx]
+        windows.append({
+            "name": w["name"],
+            "layout": w["layout"],
+            "panes": sorted(w["panes"], key=lambda p: int(p["index"]))
+        })
+    manifest.append({"session": sess_name, "windows": windows})
+
+with open(manifest_path, "w") as f:
+    json.dump(manifest, f, indent=2)
+
+# Summary
+total_panes = sum(len(w["panes"]) for s in manifest for w in s["windows"])
+claude_panes = sum(1 for s in manifest for w in s["windows"] for p in w["panes"] if p["type"] == "claude")
+print(f"  Captured {len(manifest)} sessions, {total_panes} panes ({claude_panes} claude)")
+PYEOF
+                echo -e "${GREEN}  ✓ Manifest saved: $manifest${NC}"
+                ;;
+
+            load)
+                manifest="$HOME/.config/pc/session-manifest.json"
+                if [[ ! -f "$manifest" ]]; then
+                    echo -e "${YELLOW}No manifest found. Run 'pc session save' on the other PC first.${NC}"
+                    exit 1
+                fi
+
+                force=0
+                [[ "${1:-}" == "--force" || "${1:-}" == "-f" ]] && force=1
+
+                # Kill matching sessions if --force
+                if [[ "$force" == "1" ]]; then
+                    echo -e "${CYAN}→ Killing existing matching sessions...${NC}"
+                    for sess_name in $(python3 -c "import json; m=json.load(open('$manifest')); [print(s['session']) for s in m]"); do
+                        tmux kill-session -t "$sess_name" 2>/dev/null && \
+                            echo -e "  killed: $sess_name" || true
+                    done
+                fi
+
+                echo -e "${CYAN}→ Restoring tmux sessions from manifest...${NC}"
+
+                python3 - "$manifest" "$PC_USER" "$LOCAL_USER" <<'PYEOF'
+import subprocess, json, sys, os, time
+
+manifest_path = sys.argv[1]
+remote_user = sys.argv[2]
+local_user = sys.argv[3]
+
+with open(manifest_path) as f:
+    manifest = json.load(f)
+
+def run(cmd):
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+def tmux(*args):
+    return run(["tmux"] + list(args))
+
+    # Query tmux base indices
+base_idx = int(tmux("show-options", "-gv", "base-index").stdout.strip() or "0")
+pane_base = int(tmux("show-options", "-gv", "pane-base-index").stdout.strip() or "0")
+
+created = 0
+skipped = 0
+for sess in manifest:
+    sess_name = sess["session"]
+
+    # Check if session already exists
+    r = tmux("has-session", "-t", sess_name)
+    if r.returncode == 0:
+        skipped += 1
+        print(f"  Session '{sess_name}' already exists, skipping")
+        continue
+
+    for wi, win in enumerate(sess["windows"]):
+        win_num = wi + base_idx
+        for pi, pane in enumerate(win["panes"]):
+            pane_num = pi + pane_base
+            cwd = pane["cwd"]
+            # Only translate if not already local user's path
+            if not cwd.startswith(f"/home/{local_user}") and (
+                cwd == f"/home/{remote_user}" or cwd.startswith(f"/home/{remote_user}/")
+            ):
+                cwd = f"/home/{local_user}" + cwd[len(f"/home/{remote_user}"):]
+
+            if wi == 0 and pi == 0:
+                tmux("new-session", "-d", "-s", sess_name, "-n", win["name"], "-c", cwd)
+            elif pi == 0:
+                tmux("new-window", "-t", f"{sess_name}:", "-n", win["name"], "-c", cwd)
+            else:
+                tmux("split-window", "-t", f"{sess_name}:{win_num}", "-c", cwd)
+
+            target = f"{sess_name}:{win_num}.{pane_num}"
+
+            if pane["type"] == "claude":
+                sid = pane.get("session_id", "")
+                claude_bin = os.path.expanduser("~/.local/bin/claude")
+                if sid:
+                    cmd = f"{claude_bin} --dangerously-skip-permissions --resume {sid}"
+                else:
+                    cmd = f"{claude_bin} --dangerously-skip-permissions -r"
+                tmux("send-keys", "-t", target, cmd, "Enter")
+
+            created += 1
+
+        # Apply layout after all panes in window are created
+        if win.get("layout"):
+            tmux("select-layout", "-t", f"{sess_name}:{win_num}", win["layout"])
+
+msg = f"  Restored {created} panes"
+if skipped:
+    msg += f" ({skipped} sessions already existed, skipped)"
+print(msg)
+PYEOF
+                echo -e "${GREEN}  ✓ tmux sessions restored${NC}"
+                ;;
+
+            show)
+                manifest="$HOME/.config/pc/session-manifest.json"
+                if [[ ! -f "$manifest" ]]; then
+                    echo -e "${YELLOW}No manifest found${NC}"
+                    exit 1
+                fi
+                python3 -c "
+import json, sys
+with open('$manifest') as f:
+    m = json.load(f)
+for s in m:
+    print(f\"\\033[1;36m{s['session']}\\033[0m\")
+    for w in s['windows']:
+        print(f\"  {w['name']}\")
+        for p in w['panes']:
+            sid = p.get('session_id', '')
+            tag = f' [{sid[:8]}...]' if sid else ''
+            print(f\"    [{p['type']}] {p['cwd']}{tag}\")
+"
+                ;;
+
+            push)
+                check_conn
+                manifest="$HOME/.config/pc/session-manifest.json"
+                if [[ ! -f "$manifest" ]]; then
+                    echo -e "${YELLOW}No manifest. Run 'pc session save' first.${NC}"
+                    exit 1
+                fi
+                # Translate paths in manifest and push
+                remote_manifest="/home/${PC_USER}/.config/pc/session-manifest.json"
+                ssh "$PC2" "mkdir -p $(dirname "$remote_manifest")"
+                sed -e "s|/home/${LOCAL_USER}/|/home/${PC_USER}/|g" \
+                    -e "s|/home/${LOCAL_USER}\"|/home/${PC_USER}\"|g" "$manifest" | \
+                    ssh "$PC2" "cat > $remote_manifest"
+                echo -e "${GREEN}  ✓ Manifest pushed to PC2${NC}"
+                ;;
+
+            transfer)
+                check_conn
+                echo -e "${CYAN}→ Full session transfer to PC2...${NC}"
+                # 1. Save current tmux state
+                "$0" session save
+                # 2. Sync claude sessions
+                SYNC_KEEP=0
+                export SYNC_KEEP
+                sync_claude
+                # 3. Push manifest
+                "$0" session push
+                echo -e "${GREEN}  ✓ Session transfer complete. Run 'pc session load' on PC2.${NC}"
+                ;;
+
+            *)
+                echo "Usage: pc session <command>"
+                echo "  save      - capture current tmux layout + claude sessions"
+                echo "  show      - display saved manifest"
+                echo "  push      - push manifest to PC2"
+                echo "  load      - restore tmux sessions from manifest"
+                echo "  transfer  - save + sync claude + push (all-in-one)"
+                ;;
+        esac
+        ;;
+
+    # --- Help ---
+    *)
+        echo "Usage: pc <command>"
+        echo ""
+        echo "Connect:"
+        echo "  ssh           - SSH to second PC"
+        echo "  vnc           - VNC to Hyprland session"
+        echo "  tmux          - attach to tmux on second PC"
+        echo ""
+        echo "Sync:"
+        echo "  sync [p|c|t|a]  - sync projects/claude/tmux/all"
+        echo "  status          - show what's out of sync"
+        echo ""
+        echo "Copy:"
+        echo "  copy [--from] <path>  - copy file/dir to/from PC2 (same path)"
+        echo ""
+        echo "Backup:"
+        echo "  backup apply  - restore Claude dialogs from last backup"
+        echo "  backup ls     - list backed up files"
+        echo "  backup clear  - delete backup"
+        echo ""
+        echo "Session:"
+        echo "  session save      - capture tmux layout + claude sessions"
+        echo "  session show      - display saved manifest"
+        echo "  session push      - push manifest to PC2"
+        echo "  session load      - restore tmux sessions from manifest"
+        echo "  session transfer  - save + sync + push (all-in-one)"
+        echo ""
+        echo "Manage:"
+        echo "  ignore            - ignore current project from sync"
+        echo "  unignore          - remove from ignore"
+        echo "  include [--from]  - sync current project (ALL files, no ignores)"
+        echo "  ls                - list ignored projects and patterns"
+        echo "  init              - generate Unison profiles from templates"
+        echo ""
+        echo "Flags:"
+        echo "  --from / -f       - reverse direction (PC2 → laptop)"
+        echo "  --keep / -k       - don't touch files that exist on both (sync only new)"
+        ;;
+esac

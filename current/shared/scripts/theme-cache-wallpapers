@@ -1,15 +1,19 @@
 #!/bin/bash
-# Pre-generate palette.conf for all wallpapers
-# Run once: theme-cache-wallpapers
-# Then WallpaperSelect.sh uses cached palette instead of live wallust
+# Pre-generate palette cache for all wallpapers
+# Palettes saved to ~/.cache/wallpaper-palettes/{hash}.conf
+# Does NOT change current theme — only builds cache for instant Super+W switching
 
 CACHE_DIR="$HOME/.cache/wallpaper-palettes"
 WALL_DIR="$HOME/Pictures/wallpapers"
-TEMPLATE="$HOME/.config/wallust/templates/palette.conf"
+TEMP_PALETTE="/tmp/wallust-palette-cache.conf"
 
 mkdir -p "$CACHE_DIR"
 
+# Save current palette so we can restore after
+cp "$HOME/.config/theme/palette.conf" /tmp/palette-backup.conf 2>/dev/null
+
 count=0
+skipped=0
 total=$(find "$WALL_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" \) | wc -l)
 
 echo "Pre-caching palettes for $total wallpapers..."
@@ -17,26 +21,24 @@ echo "Pre-caching palettes for $total wallpapers..."
 find "$WALL_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" \) | while read -r img; do
     hash=$(echo "$img" | md5sum | cut -c1-12)
     cache_file="$CACHE_DIR/${hash}.conf"
+    count=$((count + 1))
 
     if [[ -f "$cache_file" ]]; then
-        count=$((count + 1))
+        skipped=$((skipped + 1))
         continue
     fi
 
-    count=$((count + 1))
     echo "[$count/$total] $(basename "$img")"
 
-    # Run wallust silently
+    # Run wallust (writes to ~/.config/theme/palette.conf via template)
     wallust run "$img" 2>/dev/null
 
-    # Copy generated palette
-    if [[ -f "$HOME/.config/theme/palette.conf" ]]; then
-        # Run accent selection
-        python3 -c "
+    # Run accent selection on the generated palette
+    python3 -c "
 import colorsys, re
 palette = {}
 for line in open('$HOME/.config/theme/palette.conf'):
-    m = re.match(r'^(\w+)=([0-9A-Fa-f]{6})\s*$', line.strip())
+    m = re.match(r'^(\w+)=([0-9A-Fa-f]{6})\s*\$', line.strip())
     if m: palette[m.group(1)] = m.group(2)
 bg_l = colorsys.rgb_to_hls(*[int(palette.get('bg','000000')[i:i+2],16)/255 for i in (0,2,4)])[1]
 candidates = [(k, palette[k]) for k in ['red','green','yellow','blue','magenta','cyan','bright_red','bright_green','bright_yellow','bright_blue','bright_magenta','bright_cyan'] if k in palette]
@@ -57,8 +59,16 @@ if scored:
         f.write('accent=' + scored[0][1] + '\n')
         f.write('accent_secondary=' + (scored[1][1] if len(scored)>1 else scored[0][1]) + '\n')
 " 2>/dev/null
-        cp "$HOME/.config/theme/palette.conf" "$cache_file"
-    fi
+
+    # Save to cache (NOT current theme)
+    cp "$HOME/.config/theme/palette.conf" "$cache_file"
 done
 
-echo "Done! Cached $total palettes in $CACHE_DIR"
+# Restore original palette
+cp /tmp/palette-backup.conf "$HOME/.config/theme/palette.conf" 2>/dev/null
+rm -f /tmp/palette-backup.conf
+
+echo ""
+echo "Done! Cached palettes in $CACHE_DIR"
+echo "Skipped $skipped already cached."
+echo "Current theme unchanged."
