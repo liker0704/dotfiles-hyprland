@@ -1,0 +1,55 @@
+#!/bin/bash
+# Detect whether a wallpaper should drive light or dark UI.
+#
+# Algorithm (per 2025-2026 community research — matches Omarchy Colour):
+#   1. Resize wallpaper to 64x64 (fast, preserves distribution).
+#   2. Convert to CIE Lab.
+#   3. Compute mean L channel (0..1 normalized).
+#   4. Threshold 0.55 — corrects for human perception asymmetry
+#      where middle-gray L*=50 feels "dark enough" for light UI.
+#
+# Falls back gracefully:
+#   - If no wallpaper arg: use swww query on focused monitor.
+#   - If ImageMagick missing: exit with "dark" (safer default).
+#
+# Output: prints "light" or "dark" to stdout. Exit 0.
+
+THRESHOLD="${THEME_MODE_THRESHOLD:-0.55}"
+WALLPAPER="$1"
+
+if [[ -z "$WALLPAPER" ]]; then
+  if command -v hyprctl &>/dev/null && command -v swww &>/dev/null; then
+    focused=$(hyprctl monitors -j 2>/dev/null | python3 -c "
+import json, sys
+m = json.load(sys.stdin)
+print(next((x['name'] for x in m if x.get('focused')), ''))
+" 2>/dev/null)
+    [[ -n "$focused" ]] && WALLPAPER=$(swww query 2>/dev/null | grep -F "$focused:" | grep -oP 'image: \K.*')
+    [[ -z "$WALLPAPER" ]] && WALLPAPER=$(swww query 2>/dev/null | head -1 | grep -oP 'image: \K.*')
+  fi
+fi
+
+if [[ -z "$WALLPAPER" || ! -f "$WALLPAPER" ]]; then
+  echo "dark"
+  exit 0
+fi
+
+if ! command -v magick &>/dev/null; then
+  echo "dark"
+  exit 0
+fi
+
+# Lab L mean. -colorspace LAB in ImageMagick gives L in [0,1] after
+# normalisation; `%[fx:u.r]` reads the red channel of a 1x1 output which,
+# after -colorspace LAB + -resize 1x1, is the image's mean L.
+L=$(magick "$WALLPAPER" -resize 64x64 -colorspace LAB -resize 1x1\! \
+    -format "%[fx:u.r]" info: 2>/dev/null)
+
+if [[ -z "$L" ]]; then
+  echo "dark"
+  exit 0
+fi
+
+# Bash-awk float comparison
+result=$(awk -v l="$L" -v t="$THRESHOLD" 'BEGIN { print (l < t) ? "dark" : "light" }')
+echo "$result"

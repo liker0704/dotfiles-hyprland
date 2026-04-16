@@ -18,11 +18,17 @@ read_palette() {
   FONT=$(grep '^font=' "$PALETTE" 2>/dev/null | cut -d= -f2-)
   [[ -z "$FONT" ]] && FONT="JetBrainsMono Nerd Font"
 
-  # Detect dark/light
-  local bg_r=$((16#${C[bg]:0:2})) bg_g=$((16#${C[bg]:2:2})) bg_b=$((16#${C[bg]:4:2}))
-  local bg_lum=$(( (bg_r * 299 + bg_g * 587 + bg_b * 114) / 1000 ))
+  # Detect dark/light: full-image Lab L mean via theme-detect-mode helper
+  # (more robust than single-pixel BT.601 on wallust bg). Falls back to
+  # bg-based BT.601 if detector unavailable.
   is_light=false
-  (( bg_lum > 128 )) && is_light=true
+  if command -v theme-detect-mode &>/dev/null; then
+    [[ "$(theme-detect-mode)" == "light" ]] && is_light=true
+  else
+    local bg_r=$((16#${C[bg]:0:2})) bg_g=$((16#${C[bg]:2:2})) bg_b=$((16#${C[bg]:4:2}))
+    local bg_lum=$(( (bg_r * 299 + bg_g * 587 + bg_b * 114) / 1000 ))
+    (( bg_lum > 128 )) && is_light=true
+  fi
 
   # Accent & shadow
   if $is_light; then

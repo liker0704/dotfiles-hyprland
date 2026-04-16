@@ -65,19 +65,27 @@ if [[ -z "$seed" ]]; then
   return 0 2>/dev/null || exit 0
 fi
 
-md3_cache="$MD3_CACHE_DIR/${seed}.json"
+# Detect dark/light mode from full wallpaper (Lab L mean, threshold 0.55).
+MODE="dark"
+if command -v theme-detect-mode &>/dev/null; then
+  MODE=$(theme-detect-mode "$WALLPAPER" 2>/dev/null)
+  [[ -z "$MODE" ]] && MODE="dark"
+fi
+
+# Cache key includes mode so light/dark seeds don't collide
+md3_cache="$MD3_CACHE_DIR/${seed}-${MODE}.json"
 
 if [[ -f "$md3_cache" ]]; then
   mkdir -p "$(dirname "$QS_JSON")"
   cp "$md3_cache" "$QS_JSON"
-  source_label="cached: #$seed"
+  source_label="cached: #$seed ($MODE)"
 else
   if [[ -f "$MATUGEN_CONFIG" ]]; then
-    matugen color hex "#$seed" -c "$MATUGEN_CONFIG" 2>/dev/null
+    matugen color hex "#$seed" -m "$MODE" -c "$MATUGEN_CONFIG" 2>/dev/null
   else
-    matugen color hex "#$seed" 2>/dev/null
+    matugen color hex "#$seed" -m "$MODE" 2>/dev/null
   fi
-  source_label="seed: #$seed"
+  source_label="seed: #$seed ($MODE)"
 
   # Save to per-accent cache
   if [[ -f "$QS_JSON" ]]; then

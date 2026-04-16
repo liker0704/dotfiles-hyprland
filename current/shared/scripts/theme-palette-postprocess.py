@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-Fix wallust-generated palette: compute balanced derived colors via blend(),
-auto-select accent/accent_secondary by saturation, rewrite palette file.
+Fix wallust-generated palette:
+  1. Compute balanced derived tones via blend().
+  2. Auto-select accent/accent_secondary by saturation.
+  3. Validate ANSI 16 — replace colors that are the wrong hue, too close
+     to bg, or duplicates, with engineered fallbacks harmonized to seed.
+  4. Rewrite palette file with stable accent_seed + accent fields.
 
 Usage: theme-palette-postprocess.py <palette-path>
 """
@@ -11,11 +15,94 @@ import re
 import sys
 
 
+def hex_to_rgb(h: str) -> tuple[float, float, float]:
+    return tuple(int(h[i:i+2], 16) / 255 for i in (0, 2, 4))
+
+
+def rgb_to_hex(r: float, g: float, b: float) -> str:
+    return ''.join(f'{int(max(0, min(1, v)) * 255):02x}' for v in (r, g, b))
+
+
+def hex_to_hls(h: str) -> tuple[float, float, float]:
+    r, g, b = hex_to_rgb(h)
+    return colorsys.rgb_to_hls(r, g, b)
+
+
+def hls_to_hex(h: float, l: float, s: float) -> str:
+    h = h % 1.0
+    r, g, b = colorsys.hls_to_rgb(h, l, s)
+    return rgb_to_hex(r, g, b)
+
+
 def blend(c1: str, c2: str, ratio: float) -> str:
     return ''.join(
         f'{int(int(c1[i:i+2], 16) * (1 - ratio) + int(c2[i:i+2], 16) * ratio):02x}'
         for i in (0, 2, 4)
     )
+
+
+# Semantic hue targets (degrees, 0-360). Tolerance = acceptable deviation.
+# If wallust pick lands outside hue ± tol, we substitute with engineered color.
+ANSI_TARGETS = {
+    'red':     (  0, 40),
+    'green':   (130, 45),
+    'yellow':  ( 48, 22),
+    'blue':    (215, 30),
+    'magenta': (300, 35),
+    'cyan':    (180, 25),
+}
+
+
+def hue_dist(h1_deg: float, h2_deg: float) -> float:
+    d = abs(h1_deg - h2_deg) % 360
+    return min(d, 360 - d)
+
+
+def engineer_ansi(target_hue_deg: float, seed_hue_deg: float,
+                  is_bright: bool, is_dark_bg: bool) -> str:
+    """Build a palette-coherent ANSI color: shift target hue slightly toward
+    seed (up to 12°) for tonal harmony, set sat/light per dark/light theme."""
+    # Tonal harmonization: pull target toward seed hue by 12° max
+    dist = ((seed_hue_deg - target_hue_deg + 540) % 360) - 180
+    shifted = (target_hue_deg + max(-12, min(12, dist))) % 360
+
+    if is_dark_bg:
+        s = 0.60 if is_bright else 0.55
+        l = 0.70 if is_bright else 0.62
+    else:
+        s = 0.65 if is_bright else 0.58
+        l = 0.35 if is_bright else 0.42
+
+    return hls_to_hex(shifted / 360, l, s)
+
+
+def fix_ansi(palette: dict[str, str], seed_hex: str, is_dark_bg: bool) -> None:
+    bg_hex = palette.get('bg', '000000')
+    bg_l = hex_to_hls(bg_hex)[1]
+    seed_h = hex_to_hls(seed_hex)[0] * 360
+
+    finalized: set[str] = set()
+
+    for name, (target_h, tol) in ANSI_TARGETS.items():
+        for is_bright, key in [(False, name), (True, f'bright_{name}')]:
+            current = palette.get(key)
+            needs_fix = True
+            if current:
+                ch, cl, cs = hex_to_hls(current)
+                cur_h_deg = ch * 360
+                # Check 1: hue close to semantic target?
+                hue_ok = hue_dist(cur_h_deg, target_h) <= tol
+                # Check 2: enough contrast with bg?
+                contrast_ok = abs(cl - bg_l) > 0.18
+                # Check 3: saturation not too low (avoid muddy near-grays)?
+                sat_ok = cs > 0.15
+                # Check 4: not a duplicate of an already-kept color?
+                unique_ok = current.lower() not in finalized
+                if hue_ok and contrast_ok and sat_ok and unique_ok:
+                    needs_fix = False
+            if needs_fix:
+                palette[key] = engineer_ansi(target_h, seed_h, is_bright, is_dark_bg)
+            finalized.add(palette[key].lower())
 
 
 def main(path: str) -> None:
@@ -24,18 +111,20 @@ def main(path: str) -> None:
         for line in fh:
             m = re.match(r'^(\w+)=([0-9A-Fa-f]{6})\s*$', line.strip())
             if m:
-                palette[m.group(1)] = m.group(2)
+                palette[m.group(1)] = m.group(2).lower()
 
     bg = palette.get('bg', '000000')
     fg = palette.get('foreground', palette.get('fg', 'ffffff'))
 
+    # Derived tones
     palette['bg_light'] = blend(bg, fg, 0.07)
     palette['bg_highlight'] = blend(bg, fg, 0.19)
     palette['fg_dim'] = blend(fg, bg, 0.33)
     palette['fg_muted'] = blend(fg, bg, 0.55)
     palette['border'] = blend(bg, fg, 0.28)
 
-    bg_l = colorsys.rgb_to_hls(*[int(bg[i:i+2], 16) / 255 for i in (0, 2, 4)])[1]
+    # Auto-accent: highest saturation × contrast-with-bg from ANSI candidates
+    bg_l = hex_to_hls(bg)[1]
     candidates = [
         (k, palette[k])
         for k in [
@@ -47,8 +136,7 @@ def main(path: str) -> None:
     ]
     scored = []
     for _name, h in candidates:
-        r, g, b = [int(h[i:i+2], 16) / 255 for i in (0, 2, 4)]
-        _, l, s = colorsys.rgb_to_hls(r, g, b)
+        _, l, s = hex_to_hls(h)
         gap = abs(l - bg_l)
         if gap < 0.1:
             continue
@@ -59,16 +147,21 @@ def main(path: str) -> None:
         palette['accent'] = scored[0][1]
         palette['accent_secondary'] = scored[1][1] if len(scored) > 1 else scored[0][1]
 
+    # Smart ANSI fallback — fix wrong-hue / near-bg / duplicate slots
+    seed_hex = palette.get('accent', '7aa2f7')
+    is_dark = bg_l < 0.5
+    fix_ansi(palette, seed_hex, is_dark)
+
     font = palette.get('font', 'JetBrainsMono Nerd Font')
 
     with open(path, 'w') as f:
         f.write('# Terminal color palette — single source of truth\n')
-        f.write('# Theme: Wallpaper (wallust)\n')
+        f.write('# Theme: Wallpaper (wallust + smart ANSI fallback)\n')
         f.write('# Edit this file, then run: theme sync\n\n')
         f.write('# Base colors\n')
         for k in ['bg', 'bg_light', 'bg_highlight', 'fg', 'fg_dim', 'fg_muted', 'border']:
             f.write(f'{k}={palette.get(k, "000000")}\n')
-        f.write('\n# Terminal 16 colors\n')
+        f.write('\n# Terminal 16 colors (wallust picks, with smart fallback for broken slots)\n')
         for pair in [
             ('black', 'bright_black'), ('red', 'bright_red'),
             ('green', 'bright_green'), ('yellow', 'bright_yellow'),
@@ -81,7 +174,7 @@ def main(path: str) -> None:
         #   Used as matugen MD3 seed. Stable across theme syncs.
         # accent = matugen MD3 primary derived from seed (or = seed if matugen
         #   hasn't run yet). Final value consumed by all theme targets.
-        seed_val = palette.get("accent", "7aa2f7")
+        seed_val = palette.get('accent', '7aa2f7')
         f.write(f'\n# Accent\naccent_seed={seed_val}\n')
         f.write(f'accent={seed_val}\n')
         f.write(f'accent_secondary={palette.get("accent_secondary", "bb9af7")}\n')

@@ -84,20 +84,25 @@ while read -r img; do
         cp "$GENERATED" "$cache_file"
     fi
 
-    # Matugen MD3 (cache keyed by seed, dedupes wallpapers with same accent)
+    # Matugen MD3 (keyed by seed+mode; dedupes wallpapers with same accent & mode)
     if $HAS_MATUGEN; then
         seed=$(grep '^accent_seed=' "$cache_file" | head -1 | cut -d= -f2 | tr -d ' \r\n#' | tr 'A-F' 'a-f')
-        # fallback to accent if accent_seed missing (older caches)
         if [[ -z "$seed" ]]; then
             seed=$(grep '^accent=' "$cache_file" | head -1 | cut -d= -f2 | tr -d ' \r\n#' | tr 'A-F' 'a-f')
         fi
+        # Detect mode from wallpaper image
+        mode="dark"
+        if command -v theme-detect-mode &>/dev/null; then
+            mode=$(theme-detect-mode "$img" 2>/dev/null)
+            [[ -z "$mode" ]] && mode="dark"
+        fi
         if [[ -n "$seed" ]]; then
-            seed_cache="$MD3_CACHE_DIR/${seed}.json"
+            seed_cache="$MD3_CACHE_DIR/${seed}-${mode}.json"
             if [[ ! -f "$seed_cache" ]]; then
                 if [[ -f "$MATUGEN_CONFIG" ]]; then
-                    matugen color hex "#$seed" -c "$MATUGEN_CONFIG" 2>/dev/null
+                    matugen color hex "#$seed" -m "$mode" -c "$MATUGEN_CONFIG" 2>/dev/null
                 else
-                    matugen color hex "#$seed" 2>/dev/null
+                    matugen color hex "#$seed" -m "$mode" 2>/dev/null
                 fi
                 if [[ -f "$MATUGEN_OUT" ]]; then
                     cp "$MATUGEN_OUT" "$seed_cache"
