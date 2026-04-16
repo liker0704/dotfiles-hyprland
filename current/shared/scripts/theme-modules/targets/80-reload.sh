@@ -37,11 +37,11 @@ if pgrep -x waybar &>/dev/null; then
   echo -e "    ${GREEN}waybar reloaded${RESET}"
 fi
 
-# SwayNC
+# SwayNC (replaced by quickshell NotificationServer)
 # if pgrep -x swaync &>/dev/null; then
 #   swaync-client -rs &>/dev/null
 #   echo -e "    ${GREEN}swaync reloaded${RESET}"
-fi
+# fi
 
 # --- Helper: save window state (workspace, monitor, floating) by class ---
 _save_window_pos() {
