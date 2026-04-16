@@ -180,11 +180,18 @@ apply_image_wallpaper() {
 
   swww img -o "$focused_monitor" "$image_path" $SWWW_PARAMS
 
-  # Run wallust (generates palette.conf + all color templates from wallpaper)
-  "$SCRIPTSDIR/WallustSwww.sh" "$image_path"
+  # Apply wallpaper-matched palette (cached or live)
+  local CACHE_DIR="$HOME/.cache/wallpaper-palettes"
+  local hash=$(echo "$image_path" | md5sum | cut -c1-12)
+  local cache_file="$CACHE_DIR/${hash}.conf"
 
-  # Auto-select best accent from generated palette (highest saturation)
-  python3 -c "
+  if [[ -f "$cache_file" ]]; then
+    # Instant: use pre-cached palette
+    cp "$cache_file" "$HOME/.config/theme/palette.conf"
+  else
+    # Live: run wallust + accent selection
+    "$SCRIPTSDIR/WallustSwww.sh" "$image_path"
+    python3 -c "
 import colorsys, re
 palette = {}
 for line in open('$HOME/.config/theme/palette.conf'):
@@ -201,8 +208,6 @@ for name, h in candidates:
     scored.append((s * 2 + gap * 0.5, h, name))
 scored.sort(reverse=True)
 if scored:
-    # Write accent lines
-    import tempfile, shutil
     p = '$HOME/.config/theme/palette.conf'
     lines = open(p).readlines()
     with open(p, 'w') as f:
@@ -211,8 +216,12 @@ if scored:
         f.write('accent=' + scored[0][1] + '\n')
         f.write('accent_secondary=' + (scored[1][1] if len(scored)>1 else scored[0][1]) + '\n')
 " 2>/dev/null
+    # Save to cache for next time
+    mkdir -p "$CACHE_DIR"
+    cp "$HOME/.config/theme/palette.conf" "$cache_file"
+  fi
 
-  # Sync theme to all apps (quickshell, hyprland, kitty, etc.)
+  # Sync theme to all apps
   "$HOME/.local/bin/theme" sync &
 
   sleep 1

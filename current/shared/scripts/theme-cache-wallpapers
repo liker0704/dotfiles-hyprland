@@ -1,0 +1,64 @@
+#!/bin/bash
+# Pre-generate palette.conf for all wallpapers
+# Run once: theme-cache-wallpapers
+# Then WallpaperSelect.sh uses cached palette instead of live wallust
+
+CACHE_DIR="$HOME/.cache/wallpaper-palettes"
+WALL_DIR="$HOME/Pictures/wallpapers"
+TEMPLATE="$HOME/.config/wallust/templates/palette.conf"
+
+mkdir -p "$CACHE_DIR"
+
+count=0
+total=$(find "$WALL_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" \) | wc -l)
+
+echo "Pre-caching palettes for $total wallpapers..."
+
+find "$WALL_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" \) | while read -r img; do
+    hash=$(echo "$img" | md5sum | cut -c1-12)
+    cache_file="$CACHE_DIR/${hash}.conf"
+
+    if [[ -f "$cache_file" ]]; then
+        count=$((count + 1))
+        continue
+    fi
+
+    count=$((count + 1))
+    echo "[$count/$total] $(basename "$img")"
+
+    # Run wallust silently
+    wallust run "$img" 2>/dev/null
+
+    # Copy generated palette
+    if [[ -f "$HOME/.config/theme/palette.conf" ]]; then
+        # Run accent selection
+        python3 -c "
+import colorsys, re
+palette = {}
+for line in open('$HOME/.config/theme/palette.conf'):
+    m = re.match(r'^(\w+)=([0-9A-Fa-f]{6})\s*$', line.strip())
+    if m: palette[m.group(1)] = m.group(2)
+bg_l = colorsys.rgb_to_hls(*[int(palette.get('bg','000000')[i:i+2],16)/255 for i in (0,2,4)])[1]
+candidates = [(k, palette[k]) for k in ['red','green','yellow','blue','magenta','cyan','bright_red','bright_green','bright_yellow','bright_blue','bright_magenta','bright_cyan'] if k in palette]
+scored = []
+for name, h in candidates:
+    r,g,b = [int(h[i:i+2],16)/255 for i in (0,2,4)]
+    _, l, s = colorsys.rgb_to_hls(r, g, b)
+    gap = abs(l - bg_l)
+    if gap < 0.1: continue
+    scored.append((s * 2 + gap * 0.5, h, name))
+scored.sort(reverse=True)
+if scored:
+    p = '$HOME/.config/theme/palette.conf'
+    lines = open(p).readlines()
+    with open(p, 'w') as f:
+        for line in lines:
+            if not line.startswith('accent'): f.write(line)
+        f.write('accent=' + scored[0][1] + '\n')
+        f.write('accent_secondary=' + (scored[1][1] if len(scored)>1 else scored[0][1]) + '\n')
+" 2>/dev/null
+        cp "$HOME/.config/theme/palette.conf" "$cache_file"
+    fi
+done
+
+echo "Done! Cached $total palettes in $CACHE_DIR"
