@@ -12,14 +12,28 @@ if ! command -v matugen &>/dev/null; then
   return 0 2>/dev/null || exit 0
 fi
 
-# Get current wallpaper
+# Get current wallpaper of the FOCUSED monitor (not the first one swww lists).
+# On multi-monitor setups, swww query may list a different monitor's wallpaper
+# than the one user just changed via Super+W.
 WALLPAPER=""
-if command -v swww &>/dev/null; then
+if command -v swww &>/dev/null && command -v hyprctl &>/dev/null; then
+  focused=$(hyprctl monitors -j 2>/dev/null | python3 -c "
+import json, sys
+mons = json.load(sys.stdin)
+print(next((m['name'] for m in mons if m.get('focused')), ''))
+" 2>/dev/null)
+  if [[ -n "$focused" ]]; then
+    WALLPAPER=$(swww query 2>/dev/null | grep -F "$focused:" | grep -oP 'image: \K.*')
+  fi
+fi
+
+# Fallback: first monitor swww reports
+if [[ -z "$WALLPAPER" || ! -f "$WALLPAPER" ]]; then
   WALLPAPER=$(swww query 2>/dev/null | head -1 | grep -oP 'image: \K.*')
 fi
 
+# Last fallback: rofi current marker
 if [[ -z "$WALLPAPER" || ! -f "$WALLPAPER" ]]; then
-  # Fallback: check .current_wallpaper
   WALLPAPER=$(cat "$HOME/.config/rofi/.current_wallpaper" 2>/dev/null)
 fi
 
