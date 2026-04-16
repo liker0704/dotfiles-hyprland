@@ -4,6 +4,7 @@ import Quickshell.Widgets
 import Quickshell.Services.Notifications
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Effects
 import ".."
 
 Scope {
@@ -13,17 +14,17 @@ Scope {
         PanelWindow {
             required property var modelData
             screen: modelData
-            visible: NotificationService.count > 0
+            Colors { id: colors }
+            visible: true
+            implicitHeight: NotificationService.count > 0 ? notifCol.implicitHeight + 60 : 0
             focusable: false
             color: "transparent"
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
             exclusionMode: ExclusionMode.Ignore
             anchors { top: true; right: true }
-            implicitWidth: 400
-            implicitHeight: notifCol.implicitHeight + 60
+            implicitWidth: NotificationService.count > 0 ? 400 : 0
 
-            Colors { id: colors }
 
             ColumnLayout {
                 id: notifCol
@@ -41,18 +42,20 @@ Scope {
                         Layout.preferredHeight: card.height + 4
 
                         // Shadow
-                        Rectangle {
-                            anchors.fill: card
-                            anchors.topMargin: 2; anchors.leftMargin: 1; anchors.rightMargin: -1; anchors.bottomMargin: -2
-                            radius: 18; color: Qt.rgba(0, 0, 0, 0.2)
+                        RectangularShadow {
+                            anchors.fill: card; radius: card.radius
+                            blur: Appearance.shadow.medium; spread: 1
+                            color: Qt.rgba(0, 0, 0, Appearance.shadow.opacity)
+                            offset: Qt.vector2d(0, 3)
                         }
 
                         Rectangle {
                             id: card
                             width: parent.width
                             height: cardCol.implicitHeight + 24
-                            radius: 18
-                            color: Qt.rgba(colors.bg.r, colors.bg.g, colors.bg.b, 0.96)
+                            radius: Appearance.rounding.large
+                            color: Qt.rgba(colors.bg.r, colors.bg.g, colors.bg.b, Appearance.notif.bgAlpha)
+                            antialiasing: true
                             border.width: 1
                             border.color: cardRoot.modelData.urgency === NotificationUrgency.Critical
                                 ? Qt.rgba(colors.error.r, colors.error.g, colors.error.b, 0.4)

@@ -6,7 +6,6 @@ import "notifications"
 import "osd"
 import "session"
 import "launcher"
-// import "lockscreen"  // disabled — PAM auth needs fixing
 
 Scope {
     Variants {
@@ -22,5 +21,4 @@ Scope {
     OSD {}
     SessionMenu {}
     AppLauncher {}
-    // LockScreen {}  // disabled for now
 }

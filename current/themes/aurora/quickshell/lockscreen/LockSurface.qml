@@ -9,7 +9,6 @@ Rectangle {
     required property var context
     color: Qt.rgba(colors.bg.r, colors.bg.g, colors.bg.b, 1.0)
 
-    Colors { id: colors }
 
     // Clock
     property string timeStr: ""

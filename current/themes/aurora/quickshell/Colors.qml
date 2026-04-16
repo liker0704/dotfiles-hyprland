@@ -9,45 +9,22 @@ Item {
     property string _palettePath: Quickshell.env("HOME") + "/.config/theme/palette.conf"
     property string _paletteDir: Quickshell.env("HOME") + "/.config/theme"
 
-    // --- Read palette file ---
-    Process {
-        id: readProc
-        command: ["cat", root._palettePath]
-        stdout: SplitParser {
-            splitMarker: ""
-            onRead: data => root.parsePalette(data)
-        }
+    FileView {
+        id: paletteFile
+        path: root._palettePath
+        onLoadedChanged: if (loaded) root.reload()
     }
 
-    // --- Watch directory for instant file replacement detection ---
     Process {
-        id: watcher
-        running: true
-        command: [
-            "inotifywait", "-m", "-q",
-            "-e", "close_write,moved_to",
-            "--format", "%f",
-            root._paletteDir
-        ]
-        stdout: SplitParser {
-            onRead: data => {
-                if (data.trim() === "palette.conf") {
-                    readProc.running = false
-                    readProc.running = true
-                }
-            }
-        }
-        onRunningChanged: {
-            if (!running) running = true
-        }
+        id: watcher; running: true
+        command: ["inotifywait", "-m", "-q", "-e", "close_write,moved_to", "--format", "%f", root._paletteDir]
+        stdout: SplitParser { onRead: data => { if (data.trim() === "palette.conf") root.reload() } }
+        onRunningChanged: { if (!running) running = true }
     }
 
-    Component.onCompleted: { readProc.running = true }
-
-    // --- Parse ---
-    property var _map: ({})
-
-    function parsePalette(content) {
+    function reload() {
+        var content = paletteFile.text()
+        if (!content || content.length === 0) return
         var map = {}
         var lines = content.split('\n')
         for (var i = 0; i < lines.length; i++) {
@@ -60,76 +37,34 @@ Item {
             }
         }
         _map = map
-        applyColors()
+        // Set all properties directly from map
+        var cc = function(k, fb) { return map[k] || (fb ? map[fb] : null) || "#ff00ff" }
+        var h = function(hex, a) {
+            var s = hex.replace("#","")
+            return Qt.rgba(parseInt(s.substring(0,2),16)/255, parseInt(s.substring(2,4),16)/255, parseInt(s.substring(4,6),16)/255, a)
+        }
+        root.bg = cc("bg"); root.bgLight = cc("bg_light"); root.bgHighlight = cc("bg_highlight")
+        root.fg = cc("fg"); root.fgDim = cc("fg_dim"); root.fgMuted = cc("fg_muted"); root.border = cc("border")
+        root.bgPill = h(cc("bg"), 0.97); root.bgHover = h(cc("bg_light"), 0.97)
+        root.accent = cc("accent", "green"); root.accentSecondary = cc("accent_secondary", "blue")
+        root.error = cc("error", "red"); root.warning = cc("warning", "yellow")
+        root.success = cc("success", "green"); root.info = cc("info", "cyan")
     }
 
-    function c(key, fallbackKey) {
-        if (_map[key]) return _map[key]
-        if (fallbackKey && _map[fallbackKey]) return _map[fallbackKey]
-        return "#ff00ff"
-    }
-
-    function applyColors() {
-        bg = c("bg"); bgLight = c("bg_light"); bgHighlight = c("bg_highlight")
-        fg = c("fg"); fgDim = c("fg_dim"); fgMuted = c("fg_muted"); border = c("border")
-        bgPill = Qt.rgba(bg.r, bg.g, bg.b, 0.97)
-        bgHover = Qt.rgba(bgLight.r, bgLight.g, bgLight.b, 0.97)
-        accent = c("accent", "blue"); accentSecondary = c("accent_secondary", "accent")
-        accentTertiary = c("accent_tertiary", "green")
-        error = c("error", "red"); warning = c("warning", "yellow")
-        success = c("success", "green"); info = c("info", "cyan")
-        black = c("black"); brightBlack = c("bright_black")
-        red = c("red"); brightRed = c("bright_red")
-        green = c("green"); brightGreen = c("bright_green")
-        yellow = c("yellow"); brightYellow = c("bright_yellow")
-        blue = c("blue"); brightBlue = c("bright_blue")
-        magenta = c("magenta"); brightMagenta = c("bright_magenta")
-        cyan = c("cyan"); brightCyan = c("bright_cyan")
-        white = c("white"); brightWhite = c("bright_white")
-        cursorColor = c("cursor", "fg"); urlColor = c("url", "cyan")
-    }
-
-    // === BASE ===
-    property color bg: "#1e1e2e"
-    property color bgLight: "#2a2a3b"
-    property color bgHighlight: "#3f4053"
-    property color fg: "#cdd6f4"
-    property color fgDim: "#9399b2"
-    property color fgMuted: "#6c7087"
-    property color border: "#4f5165"
-    property color bgPill: Qt.rgba(bg.r, bg.g, bg.b, 0.97)
-    property color bgHover: Qt.rgba(bgLight.r, bgLight.g, bgLight.b, 0.97)
-
-    // === ACCENT ===
-    property color accent: "#7aa8ff"
-    property color accentSecondary: "#c99bff"
-    property color accentTertiary: "#7be0a7"
-
-    // === STATUS ===
-    property color error: "#ff6b7a"
-    property color warning: "#ffd580"
-    property color success: "#7be0a7"
-    property color info: "#6ee7e7"
-
-    // === TERMINAL 16 ===
-    property color black: "#232631"
-    property color brightBlack: "#3a3f52"
-    property color red: "#ff6b7a"
-    property color brightRed: "#ff8594"
-    property color green: "#7be0a7"
-    property color brightGreen: "#95ebb9"
-    property color yellow: "#ffd580"
-    property color brightYellow: "#ffe199"
-    property color blue: "#7aa8ff"
-    property color brightBlue: "#9abdff"
-    property color magenta: "#c99bff"
-    property color brightMagenta: "#d6b3ff"
-    property color cyan: "#6ee7e7"
-    property color brightCyan: "#8ceded"
-    property color white: "#cdd1e4"
-    property color brightWhite: "#e6e6f0"
-
-    // === CURSOR / URL ===
-    property color cursorColor: "#7aa8ff"
-    property color urlColor: "#6ee7e7"
+    property var _map: ({})
+    property color bg: "#1a1b26"
+    property color bgLight: "#24283b"
+    property color bgHighlight: "#3b4261"
+    property color fg: "#c0caf5"
+    property color fgDim: "#9aa5ce"
+    property color fgMuted: "#565f89"
+    property color border: "#3b4261"
+    property color bgPill: Qt.rgba(0.1, 0.1, 0.15, 0.97)
+    property color bgHover: Qt.rgba(0.14, 0.16, 0.23, 0.97)
+    property color accent: "#7aa2f7"
+    property color accentSecondary: "#bb9af7"
+    property color error: "#f7768e"
+    property color warning: "#e0af68"
+    property color success: "#9ece6a"
+    property color info: "#7dcfff"
 }

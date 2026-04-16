@@ -32,6 +32,7 @@ Scope {
         PanelWindow {
             required property var modelData
             screen: modelData
+            Colors { id: colors }
             visible: root.visible
             color: "transparent"
             WlrLayershell.layer: WlrLayer.Overlay
@@ -39,7 +40,6 @@ Scope {
             exclusionMode: ExclusionMode.Ignore
             anchors { top: true; left: true; right: true; bottom: true }
 
-            Colors { id: colors }
 
             contentItem {
                 focus: true

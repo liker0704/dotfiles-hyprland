@@ -22,8 +22,8 @@ Scope {
 
     PamContext {
         id: pam
-        configDirectory: "pam"
-        config: "password.conf"
+        // Uses /etc/pam.d/quickshell (default configDirectory = /etc/pam.d)
+        config: "quickshell"
 
         onPamMessage: function(msg, isError) {
             if (responseRequired) respond(root.currentText)

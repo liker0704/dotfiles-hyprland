@@ -18,8 +18,8 @@ PanelWindow {
     margins.left: 6
     margins.right: 6
     color: "transparent"
-
     Colors { id: colors }
+
     property HyprlandMonitor monitor: Hyprland.monitorFor(bar.screen)
     property real pillHeight: bar.height - 10
 

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Hyprland
 
@@ -10,10 +11,9 @@ Item {
     property Item anchorItem: null
     property int popupWidth: 300
     property int popupHeight: 280
-    property int popupX: -1  // -1 = auto from anchorItem
+    property int popupX: -1
     property bool open: false
 
-    // Colors from parent (Bar passes these)
     property color bgColor: "#1e1e2e"
     property color borderColor: Qt.rgba(1, 1, 1, 0.06)
 
@@ -34,38 +34,44 @@ Item {
         anchor.rect.x: {
             if (root.popupX !== -1) return root.popupX
             if (!root.anchorItem) return 0
-            // Walk up parent chain to sum x offsets
-            var totalX = 0
-            var item = root.anchorItem
-            while (item && item !== root.barWindow) {
-                totalX += item.x
-                item = item.parent
-            }
+            var totalX = 0; var item = root.anchorItem
+            while (item && item !== root.barWindow) { totalX += item.x; item = item.parent }
             return totalX + root.anchorItem.width / 2 - root.popupWidth / 2
         }
-        // Y = bar height + bar top margin + gap
         anchor.rect.y: root.barWindow ? root.barWindow.implicitHeight + root.barWindow.margins.top + 6 : 44
         implicitWidth: root.popupWidth
         implicitHeight: root.popupHeight
         color: "transparent"
 
+        // Shadow
+        RectangularShadow {
+            anchors.fill: popupBg
+            radius: popupBg.radius
+            blur: Appearance.shadow.medium
+            spread: 1
+            color: Qt.rgba(0, 0, 0, Appearance.shadow.opacity)
+            offset: Qt.vector2d(0, 3)
+        }
+
         Rectangle {
             id: popupBg
             anchors.fill: parent
-            radius: 16
-            color: Qt.rgba(root.bgColor.r, root.bgColor.g, root.bgColor.b, 0.97)
+            radius: Appearance.rounding.large
+            color: Qt.rgba(root.bgColor.r, root.bgColor.g, root.bgColor.b, Appearance.popup.bgAlpha)
             border.width: 1
             border.color: root.borderColor
+            antialiasing: true
 
             opacity: root.open ? 1 : 0
-            transform: Translate { y: root.open ? 0 : -6 }
+            scale: root.open ? 1 : 0.96
 
-            Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: Appearance.anim.fast; easing.type: Easing.OutCubic } }
+            Behavior on scale { NumberAnimation { duration: Appearance.anim.normal; easing.type: Easing.OutCubic } }
 
             Item {
                 id: contentContainer
                 anchors.fill: parent
-                anchors.margins: 14
+                anchors.margins: Appearance.popup.padding
             }
         }
     }

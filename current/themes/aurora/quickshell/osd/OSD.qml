@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import Quickshell.Services.Pipewire
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Effects
 import ".."
 
 Scope {
@@ -16,9 +17,7 @@ Scope {
     property real brightnessValue: 0
     property real brightnessMax: 100
 
-    // --- Volume tracking ---
     PwObjectTracker { objects: [Pipewire.defaultAudioSink] }
-
     property real _lastVol: -1
     property bool _lastMuted: false
 
@@ -27,147 +26,89 @@ Scope {
         onTriggered: {
             var sink = Pipewire.defaultAudioSink
             if (!sink || !sink.audio) return
-            var v = sink.audio.volume
-            var m = sink.audio.muted
+            var v = sink.audio.volume; var m = sink.audio.muted
             if (Math.abs(v - root._lastVol) > 0.001 || m !== root._lastMuted) {
-                if (root._lastVol >= 0) {
-                    root.volumeValue = v
-                    root.volumeMuted = m
-                    root.showVolume = true
-                    volumeHide.restart()
-                }
-                root._lastVol = v
-                root._lastMuted = m
+                if (root._lastVol >= 0) { root.volumeValue = v; root.volumeMuted = m; root.showVolume = true; volumeHide.restart() }
+                root._lastVol = v; root._lastMuted = m
             }
         }
     }
 
-    // --- Brightness tracking ---
     Process {
-        id: findBacklight
-        command: ["bash", "-c", "ls -d /sys/class/backlight/*/brightness 2>/dev/null | head -1"]
-        running: true
-        stdout: SplitParser {
-            onRead: data => {
-                var p = data.trim()
-                if (p) {
-                    brightnessFile.path = p
-                    var maxPath = p.replace("/brightness", "/max_brightness")
-                    maxBrightnessFile.path = maxPath
-                }
-            }
-        }
+        id: findBacklight; command: ["bash", "-c", "ls -d /sys/class/backlight/*/brightness 2>/dev/null | head -1"]; running: true
+        stdout: SplitParser { onRead: data => { var p = data.trim(); if (p) { brightnessFile.path = p; maxBrightnessFile.path = p.replace("/brightness", "/max_brightness") } } }
     }
-
+    FileView { id: maxBrightnessFile; onTextChanged: { var v = parseInt(text()); if (v > 0) root.brightnessMax = v } }
     FileView {
-        id: maxBrightnessFile
-        onTextChanged: {
-            var v = parseInt(text())
-            if (v > 0) root.brightnessMax = v
-        }
+        id: brightnessFile; watchChanges: true; property real _last: -1
+        onTextChanged: { var v = parseInt(text()); if (!isNaN(v)) { var n = v / root.brightnessMax; if (Math.abs(n - _last) > 0.001) { if (_last >= 0) { root.brightnessValue = n; root.showBrightness = true; brightnessHide.restart() }; _last = n } } }
     }
 
-    FileView {
-        id: brightnessFile
-        watchChanges: true
-        property real _lastBri: -1
-        onTextChanged: {
-            var v = parseInt(text())
-            if (!isNaN(v)) {
-                var normalized = v / root.brightnessMax
-                if (Math.abs(normalized - _lastBri) > 0.001) {
-                    if (_lastBri >= 0) {
-                        root.brightnessValue = normalized
-                        root.showBrightness = true
-                        brightnessHide.restart()
-                    }
-                    _lastBri = normalized
-                }
-            }
-        }
-    }
-
-    // --- Auto-hide ---
     Timer { id: volumeHide; interval: 1500; onTriggered: root.showVolume = false }
     Timer { id: brightnessHide; interval: 1500; onTriggered: root.showBrightness = false }
 
-    // --- OSD Window ---
+    property bool showOsd: showVolume || showBrightness
+
     Variants {
         model: Quickshell.screens
 
         PanelWindow {
-            required property var modelData
-            screen: modelData
-            visible: root.showVolume || root.showBrightness
-            focusable: false
-            color: "transparent"
-            WlrLayershell.layer: WlrLayer.Overlay
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-            exclusionMode: ExclusionMode.Ignore
-            anchors { bottom: true }
-            margins.bottom: 80
-            implicitWidth: 240
-            implicitHeight: 60
-
-            // Center horizontally
-            anchors.left: true
-            anchors.right: true
-
+            required property var modelData; screen: modelData
+            visible: root.showOsd; focusable: false; color: "transparent"
             Colors { id: colors }
+            WlrLayershell.layer: WlrLayer.Overlay; WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+            exclusionMode: ExclusionMode.Ignore
+            anchors { bottom: true; left: true; right: true }
+            margins.bottom: 80; implicitWidth: 260; implicitHeight: 70
 
-            Rectangle {
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.verticalCenter: parent.verticalCenter
-                width: 220; height: 50
-                radius: 25
-                color: Qt.rgba(colors.bg.r, colors.bg.g, colors.bg.b, 0.95)
-                border.width: 1
-                border.color: Qt.rgba(colors.fg.r, colors.fg.g, colors.fg.b, 0.06)
 
-                opacity: (root.showVolume || root.showBrightness) ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+            Item {
+                anchors.horizontalCenter: parent.horizontalCenter; anchors.verticalCenter: parent.verticalCenter
+                width: 230; height: 54
 
-                RowLayout {
-                    anchors.centerIn: parent
-                    spacing: 12
+                RectangularShadow {
+                    anchors.fill: osdBg; radius: osdBg.radius
+                    blur: 12; spread: 1; color: Qt.rgba(0, 0, 0, 0.25); offset: Qt.vector2d(0, 2)
+                }
 
-                    // Icon
-                    Text {
-                        text: {
-                            if (root.showVolume) {
-                                if (root.volumeMuted) return "󰝟"
-                                if (root.volumeValue > 0.5) return "󰕾"
-                                if (root.volumeValue > 0) return "󰖀"
-                                return "󰕿"
-                            }
-                            return "󰃠"
+                Rectangle {
+                    id: osdBg; anchors.fill: parent; radius: 27
+                    color: Qt.rgba(colors.bg.r, colors.bg.g, colors.bg.b, 0.95)
+                    border.width: 1; border.color: Qt.rgba(colors.fg.r, colors.fg.g, colors.fg.b, 0.06)
+                    antialiasing: true
+
+                    opacity: root.showOsd ? 1 : 0
+                    scale: root.showOsd ? 1 : 0.9
+                    Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                    Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 } }
+
+                    RowLayout {
+                        anchors.centerIn: parent; spacing: Appearance.spacing.md
+
+                        Text {
+                            text: root.showVolume ? (root.volumeMuted ? "󰝟" : root.volumeValue > 0.5 ? "󰕾" : "󰖀") : "󰃠"
+                            font.family: Appearance.font.family; font.pointSize: Appearance.font.titleLarge
+                            color: root.volumeMuted ? colors.fgMuted : colors.accent
+                            Layout.alignment: Qt.AlignVCenter
                         }
-                        font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 18
-                        color: root.volumeMuted ? colors.fgMuted : colors.accent
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-
-                    // Progress bar
-                    Rectangle {
-                        Layout.preferredWidth: 120; Layout.preferredHeight: 6
-                        radius: 3; color: colors.bgHighlight
-                        Layout.alignment: Qt.AlignVCenter
 
                         Rectangle {
-                            width: parent.width * (root.showVolume ? root.volumeValue : root.brightnessValue)
-                            height: parent.height; radius: 3
-                            color: root.volumeMuted ? colors.fgMuted : colors.accent
-                            Behavior on width { NumberAnimation { duration: 80 } }
-                        }
-                    }
+                            Layout.preferredWidth: 120; Layout.preferredHeight: 6; radius: 3
+                            color: colors.bgHighlight; Layout.alignment: Qt.AlignVCenter
 
-                    // Percentage
-                    Text {
-                        text: Math.round((root.showVolume ? root.volumeValue : root.brightnessValue) * 100) + "%"
-                        font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold
-                        color: colors.fgDim
-                        Layout.preferredWidth: 35
-                        Layout.alignment: Qt.AlignVCenter
+                            Rectangle {
+                                width: parent.width * Math.min(1, root.showVolume ? root.volumeValue : root.brightnessValue)
+                                height: parent.height; radius: 3
+                                color: root.volumeMuted ? colors.fgMuted : colors.accent
+                                Behavior on width { NumberAnimation { duration: 80 } }
+                            }
+                        }
+
+                        Text {
+                            text: Math.round((root.showVolume ? root.volumeValue : root.brightnessValue) * 100) + "%"
+                            font.family: Appearance.font.family; font.pointSize: Appearance.font.body; font.bold: true
+                            color: colors.fgDim; Layout.preferredWidth: 35; Layout.alignment: Qt.AlignVCenter
+                        }
                     }
                 }
             }
