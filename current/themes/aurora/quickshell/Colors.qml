@@ -1,29 +1,28 @@
+pragma Singleton
 import Quickshell
 import Quickshell.Io
 import QtQuick
 
-Item {
+QtObject {
     id: root
-    visible: false
 
     property string _palettePath: Quickshell.env("HOME") + "/.config/theme/palette.conf"
     property string _paletteDir: Quickshell.env("HOME") + "/.config/theme"
 
-    FileView {
-        id: paletteFile
+    property FileView _paletteFile: FileView {
         path: root._palettePath
         onLoadedChanged: if (loaded) root.reload()
     }
 
-    Process {
-        id: watcher; running: true
+    property Process _watcher: Process {
+        running: true
         command: ["inotifywait", "-m", "-q", "-e", "close_write,moved_to", "--format", "%f", root._paletteDir]
-        stdout: SplitParser { onRead: data => { if (data.trim() === "palette.conf") root.reload() } }
+        stdout: SplitParser { onRead: data => { if (data.trim() === "palette.conf") root._paletteFile.reload() } }
         onRunningChanged: { if (!running) running = true }
     }
 
     function reload() {
-        var content = paletteFile.text()
+        var content = _paletteFile.text()
         if (!content || content.length === 0) return
         var map = {}
         var lines = content.split('\n')
@@ -37,7 +36,6 @@ Item {
             }
         }
         _map = map
-        // Set all properties directly from map
         var cc = function(k, fb) { return map[k] || (fb ? map[fb] : null) || "#ff00ff" }
         var h = function(hex, a) {
             var s = hex.replace("#","")

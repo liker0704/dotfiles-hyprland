@@ -21,17 +21,22 @@ Scope {
     property real _lastVol: -1
     property bool _lastMuted: false
 
-    Timer {
-        interval: 200; running: true; repeat: true
-        onTriggered: {
-            var sink = Pipewire.defaultAudioSink
-            if (!sink || !sink.audio) return
-            var v = sink.audio.volume; var m = sink.audio.muted
-            if (Math.abs(v - root._lastVol) > 0.001 || m !== root._lastMuted) {
-                if (root._lastVol >= 0) { root.volumeValue = v; root.volumeMuted = m; root.showVolume = true; volumeHide.restart() }
-                root._lastVol = v; root._lastMuted = m
-            }
+    function _onVolumeEvent() {
+        var sink = Pipewire.defaultAudioSink
+        if (!sink || !sink.audio) return
+        var v = sink.audio.volume; var m = sink.audio.muted
+        if (Math.abs(v - root._lastVol) < 0.001 && m === root._lastMuted) return
+        if (root._lastVol >= 0) {
+            root.volumeValue = v; root.volumeMuted = m
+            root.showVolume = true; volumeHide.restart()
         }
+        root._lastVol = v; root._lastMuted = m
+    }
+
+    Connections {
+        target: Pipewire.defaultAudioSink?.audio ?? null
+        function onVolumeChanged() { root._onVolumeEvent() }
+        function onMutedChanged() { root._onVolumeEvent() }
     }
 
     Process {
@@ -55,7 +60,6 @@ Scope {
         PanelWindow {
             required property var modelData; screen: modelData
             visible: root.showOsd; focusable: false; color: "transparent"
-            Colors { id: colors }
             WlrLayershell.layer: WlrLayer.Overlay; WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
             exclusionMode: ExclusionMode.Ignore
             anchors { bottom: true; left: true; right: true }
@@ -73,8 +77,8 @@ Scope {
 
                 Rectangle {
                     id: osdBg; anchors.fill: parent; radius: 27
-                    color: Qt.rgba(colors.bg.r, colors.bg.g, colors.bg.b, 0.95)
-                    border.width: 1; border.color: Qt.rgba(colors.fg.r, colors.fg.g, colors.fg.b, 0.06)
+                    color: Qt.rgba(Colors.bg.r, Colors.bg.g, Colors.bg.b, 0.95)
+                    border.width: 1; border.color: Qt.rgba(Colors.fg.r, Colors.fg.g, Colors.fg.b, 0.06)
                     antialiasing: true
 
                     opacity: root.showOsd ? 1 : 0
@@ -88,18 +92,18 @@ Scope {
                         Text {
                             text: root.showVolume ? (root.volumeMuted ? "󰝟" : root.volumeValue > 0.5 ? "󰕾" : "󰖀") : "󰃠"
                             font.family: Appearance.font.family; font.pointSize: Appearance.font.titleLarge
-                            color: root.volumeMuted ? colors.fgMuted : colors.accent
+                            color: root.volumeMuted ? Colors.fgMuted : Colors.accent
                             Layout.alignment: Qt.AlignVCenter
                         }
 
                         Rectangle {
                             Layout.preferredWidth: 120; Layout.preferredHeight: 6; radius: 3
-                            color: colors.bgHighlight; Layout.alignment: Qt.AlignVCenter
+                            color: Colors.bgHighlight; Layout.alignment: Qt.AlignVCenter
 
                             Rectangle {
                                 width: parent.width * Math.min(1, root.showVolume ? root.volumeValue : root.brightnessValue)
                                 height: parent.height; radius: 3
-                                color: root.volumeMuted ? colors.fgMuted : colors.accent
+                                color: root.volumeMuted ? Colors.fgMuted : Colors.accent
                                 Behavior on width { NumberAnimation { duration: 80 } }
                             }
                         }
@@ -107,7 +111,7 @@ Scope {
                         Text {
                             text: Math.round((root.showVolume ? root.volumeValue : root.brightnessValue) * 100) + "%"
                             font.family: Appearance.font.family; font.pointSize: Appearance.font.body; font.bold: true
-                            color: colors.fgDim; Layout.preferredWidth: 35; Layout.alignment: Qt.AlignVCenter
+                            color: Colors.fgDim; Layout.preferredWidth: 35; Layout.alignment: Qt.AlignVCenter
                         }
                     }
                 }

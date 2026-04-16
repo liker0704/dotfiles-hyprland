@@ -33,7 +33,6 @@ Scope {
         PanelWindow {
             required property var modelData
             screen: modelData
-            Colors { id: colors }
             visible: root.visible && Hyprland.focusedMonitor?.name === modelData.name
             color: "transparent"
             WlrLayershell.layer: WlrLayer.Overlay
@@ -88,12 +87,12 @@ Scope {
                             Layout.preferredWidth: 140; Layout.preferredHeight: 140
                             radius: 20
                             color: btnMA.containsMouse
-                                ? Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.25)
-                                : Qt.rgba(colors.bg.r, colors.bg.g, colors.bg.b, 0.85)
+                                ? Qt.rgba(Colors.accent.r, Colors.accent.g, Colors.accent.b, 0.25)
+                                : Qt.rgba(Colors.bg.r, Colors.bg.g, Colors.bg.b, 0.85)
                             border.width: 1
                             border.color: btnMA.containsMouse
-                                ? Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.4)
-                                : Qt.rgba(colors.fg.r, colors.fg.g, colors.fg.b, 0.08)
+                                ? Qt.rgba(Colors.accent.r, Colors.accent.g, Colors.accent.b, 0.4)
+                                : Qt.rgba(Colors.fg.r, Colors.fg.g, Colors.fg.b, 0.08)
 
                             Behavior on color { ColorAnimation { duration: 150 } }
                             Behavior on border.color { ColorAnimation { duration: 150 } }
@@ -104,21 +103,21 @@ Scope {
                                 Text {
                                     text: modelData.icon
                                     font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 36
-                                    color: btnMA.containsMouse ? colors.accent : colors.fg
+                                    color: btnMA.containsMouse ? Colors.accent : Colors.fg
                                     Layout.alignment: Qt.AlignHCenter
                                     Behavior on color { ColorAnimation { duration: 150 } }
                                 }
                                 Text {
                                     text: modelData.label
                                     font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; font.weight: Font.Bold
-                                    color: btnMA.containsMouse ? colors.accent : colors.fgDim
+                                    color: btnMA.containsMouse ? Colors.accent : Colors.fgDim
                                     Layout.alignment: Qt.AlignHCenter
                                     Behavior on color { ColorAnimation { duration: 150 } }
                                 }
                                 Text {
                                     text: String.fromCharCode(modelData.key).toUpperCase()
                                     font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10
-                                    color: colors.fgMuted; Layout.alignment: Qt.AlignHCenter
+                                    color: Colors.fgMuted; Layout.alignment: Qt.AlignHCenter
                                 }
                             }
 

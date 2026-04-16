@@ -14,7 +14,7 @@ QtObject {
         running: true
         command: ["inotifywait", "-m", "-q", "-e", "close_write,moved_to", "--format", "%f",
                   Quickshell.env("HOME") + "/.config/theme"]
-        stdout: SplitParser { onRead: data => { if (data.trim() === "palette.conf") root._parse() } }
+        stdout: SplitParser { onRead: data => { if (data.trim() === "palette.conf") _fv.reload() } }
         onRunningChanged: { if (!running) running = true }
     }
 

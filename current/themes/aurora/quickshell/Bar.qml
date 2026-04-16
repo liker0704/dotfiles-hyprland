@@ -18,7 +18,6 @@ PanelWindow {
     margins.left: 6
     margins.right: 6
     color: "transparent"
-    Colors { id: colors }
 
     property HyprlandMonitor monitor: Hyprland.monitorFor(bar.screen)
     property real pillHeight: bar.height - 6
@@ -37,7 +36,7 @@ PanelWindow {
     property string networkName: ""
     property string networkType: ""
     property bool networkConnected: false
-    Timer { interval: 5000; running: true; repeat: true; onTriggered: netProc.running = true }
+    Timer { interval: 30000; running: true; repeat: true; onTriggered: netProc.running = true }
     Process {
         id: netProc; running: true
         command: ["bash", "-c", "nmcli -t -f TYPE,STATE,CONNECTION d | grep connected | head -1"]
@@ -55,11 +54,19 @@ PanelWindow {
     property bool mediaAvailable: mediaTrack.length > 0
 
     property string timeStr: Qt.formatDateTime(new Date(), "h:mm AP")
-    Timer { interval: 1000; running: true; repeat: true; onTriggered: bar.timeStr = Qt.formatDateTime(new Date(), "h:mm AP") }
+    Timer {
+        interval: 60000 - (Date.now() % 60000)
+        running: true; repeat: true
+        onTriggered: {
+            interval = 60000
+            var s = Qt.formatDateTime(new Date(), "h:mm AP")
+            if (s !== bar.timeStr) bar.timeStr = s
+        }
+    }
 
     component Sep: Rectangle {
         width: 1; Layout.preferredHeight: 14; radius: 1
-        color: colors.fgMuted; opacity: 0.25; Layout.alignment: Qt.AlignVCenter
+        color: Colors.fgMuted; opacity: 0.25; Layout.alignment: Qt.AlignVCenter
     }
 
     // ==================== CLOCK (absolute center) ====================
@@ -68,10 +75,10 @@ PanelWindow {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
         width: clockText.implicitWidth + 26; height: pillHeight; radius: height / 2
-        color: colors.bgPill
+        color: Colors.bgPill
         Text {
             id: clockText; anchors.centerIn: parent; text: bar.timeStr
-            font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; font.weight: Font.DemiBold; color: colors.fg
+            font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; font.weight: Font.DemiBold; color: Colors.fg
         }
         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: calendarPopup.toggle() }
     }
@@ -80,8 +87,8 @@ PanelWindow {
     PopupBase {
         id: calendarPopup; barWindow: bar; anchorItem: clockPill
         popupWidth: 280; popupHeight: 290
-        bgColor: colors.bg; borderColor: Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.15)
-        CalendarPopup { anchors.fill: parent; accent: colors.accent; fg: colors.fg; fgDim: colors.fgDim; fgMuted: colors.fgMuted; bgHighlight: colors.bgHighlight }
+        bgColor: Colors.bg; borderColor: Qt.rgba(Colors.accent.r, Colors.accent.g, Colors.accent.b, 0.15)
+        CalendarPopup { anchors.fill: parent; accent: Colors.accent; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Colors.bgHighlight }
     }
 
     // ==================== LEFT SECTION ====================
@@ -92,7 +99,7 @@ PanelWindow {
 
         // Workspaces
         Rectangle {
-            color: colors.bgPill; radius: height / 2
+            color: Colors.bgPill; radius: height / 2
             height: pillHeight; implicitWidth: wsRow.implicitWidth + 16
 
             RowLayout {
@@ -107,12 +114,12 @@ PanelWindow {
                         required property var modelData
                         property bool isActive: modelData.id === bar.monitor.activeWorkspace?.id
                         Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 8
-                        color: isActive ? colors.accent : "transparent"
+                        color: isActive ? Colors.accent : "transparent"
                         Behavior on color { ColorAnimation { duration: 150 } }
                         Text {
                             anchors.centerIn: parent; text: modelData.id.toString()
                             font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold
-                            color: parent.isActive ? colors.bg : colors.fgMuted
+                            color: parent.isActive ? Colors.bg : Colors.fgMuted
                         }
                         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Hyprland.dispatch("workspace " + modelData.id) }
                     }
@@ -154,10 +161,8 @@ PanelWindow {
                     onClicked: function(event) {
                         if (event.button === Qt.RightButton) {
                             if (modelData.hasMenu) {
-                                var totalX = 0; var totalY = 0
-                                var item = trayMouse.parent
-                                while (item && item !== bar) { totalX += item.x; totalY += item.y; item = item.parent }
-                                modelData.display(bar, totalX + event.x, totalY + event.y)
+                                var p = trayMouse.mapToItem(null, event.x, event.y)
+                                modelData.display(bar, p.x, p.y)
                             }
                         } else {
                             modelData.activate()
@@ -169,7 +174,7 @@ PanelWindow {
 
         // Status pill
         Rectangle {
-            color: colors.bgPill; radius: height / 2
+            color: Colors.bgPill; radius: height / 2
             height: pillHeight; implicitWidth: statusRow.implicitWidth + 28
 
             RowLayout {
@@ -179,8 +184,8 @@ PanelWindow {
                 RowLayout {
                     id: volumeArea
                     spacing: 4; Layout.alignment: Qt.AlignVCenter
-                    Text { text: bar.volumeMuted ? "󰝟" : "󰕾"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; color: bar.volumeMuted ? colors.fgMuted : colors.accent; Layout.alignment: Qt.AlignVCenter }
-                    Text { text: bar.volumePercent + "%"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; color: colors.fgDim; Layout.alignment: Qt.AlignVCenter }
+                    Text { text: bar.volumeMuted ? "󰝟" : "󰕾"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; color: bar.volumeMuted ? Colors.fgMuted : Colors.accent; Layout.alignment: Qt.AlignVCenter }
+                    Text { text: bar.volumePercent + "%"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; color: Colors.fgDim; Layout.alignment: Qt.AlignVCenter }
                     MouseArea {
                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: volumePopup.toggle()
@@ -193,8 +198,8 @@ PanelWindow {
                 // Network (click = nm-connection-editor)
                 RowLayout {
                     spacing: 4; Layout.alignment: Qt.AlignVCenter
-                    Text { text: bar.networkType === "wifi" ? "󰤢" : (bar.networkConnected ? "󰈀" : "󰤠"); font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14; color: bar.networkConnected ? colors.accent : colors.fgMuted; Layout.alignment: Qt.AlignVCenter }
-                    Text { visible: bar.networkType === "wifi" && bar.networkName.length > 0; text: bar.networkName; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; color: colors.fgDim; elide: Text.ElideRight; Layout.maximumWidth: 80; Layout.alignment: Qt.AlignVCenter }
+                    Text { text: bar.networkType === "wifi" ? "󰤢" : (bar.networkConnected ? "󰈀" : "󰤠"); font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14; color: bar.networkConnected ? Colors.accent : Colors.fgMuted; Layout.alignment: Qt.AlignVCenter }
+                    Text { visible: bar.networkType === "wifi" && bar.networkName.length > 0; text: bar.networkName; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; color: Colors.fgDim; elide: Text.ElideRight; Layout.maximumWidth: 80; Layout.alignment: Qt.AlignVCenter }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Quickshell.exec(["nm-connection-editor"]) }
                 }
 
@@ -213,11 +218,11 @@ PanelWindow {
                             var cx = width/2, cy = height/2, r = 7
                             ctx.lineWidth = 2.5; ctx.lineCap = "round"
                             ctx.strokeStyle = Qt.rgba(1,1,1,0.08); ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI); ctx.stroke()
-                            ctx.strokeStyle = bar.batteryCharging ? colors.accent.toString() : (bar.batteryPercent > 20 ? colors.accent.toString() : colors.error.toString())
+                            ctx.strokeStyle = bar.batteryCharging ? Colors.accent.toString() : (bar.batteryPercent > 20 ? Colors.accent.toString() : Colors.error.toString())
                             ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + pct*2*Math.PI); ctx.stroke()
                         }
                     }
-                    Text { text: bar.batteryPercent + "%"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; color: colors.fgDim; Layout.alignment: Qt.AlignVCenter }
+                    Text { text: bar.batteryPercent + "%"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; color: Colors.fgDim; Layout.alignment: Qt.AlignVCenter }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: batteryPopup.toggle() }
                 }
 
@@ -226,7 +231,7 @@ PanelWindow {
                 // Bell
                 Text {
                     text: "󰂚"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14
-                    color: colors.fg; Layout.alignment: Qt.AlignVCenter
+                    color: Colors.fg; Layout.alignment: Qt.AlignVCenter
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Quickshell.exec(["swaync-client", "-t", "-sw"]) }
                 }
             }
@@ -237,15 +242,15 @@ PanelWindow {
     PopupBase {
         id: volumePopup; barWindow: bar; anchorItem: volumeArea
         popupWidth: 220; popupHeight: 160
-        bgColor: colors.bg; borderColor: Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.15)
-        VolumePopup { anchors.fill: parent; accent: colors.accent; fg: colors.fg; fgDim: colors.fgDim; fgMuted: colors.fgMuted; bgHighlight: colors.bgHighlight }
+        bgColor: Colors.bg; borderColor: Qt.rgba(Colors.accent.r, Colors.accent.g, Colors.accent.b, 0.15)
+        VolumePopup { anchors.fill: parent; accent: Colors.accent; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Colors.bgHighlight }
     }
 
     // Battery popup — power profiles
     PopupBase {
         id: batteryPopup; barWindow: bar; anchorItem: batteryArea
         popupWidth: 230; popupHeight: 260
-        bgColor: colors.bg; borderColor: Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.15)
-        BatteryPopup { anchors.fill: parent; accent: colors.accent; fg: colors.fg; fgDim: colors.fgDim; fgMuted: colors.fgMuted; bgHighlight: colors.bgHighlight; percent: bar.batteryPercent; charging: bar.batteryCharging }
+        bgColor: Colors.bg; borderColor: Qt.rgba(Colors.accent.r, Colors.accent.g, Colors.accent.b, 0.15)
+        BatteryPopup { anchors.fill: parent; accent: Colors.accent; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Colors.bgHighlight; percent: bar.batteryPercent; charging: bar.batteryCharging }
     }
 }

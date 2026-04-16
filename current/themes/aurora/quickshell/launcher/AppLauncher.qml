@@ -83,7 +83,6 @@ Scope {
         PanelWindow {
             required property var modelData
             screen: modelData
-            Colors { id: colors }
             visible: root.visible && Hyprland.focusedMonitor?.name === modelData.name
             color: "transparent"
             WlrLayershell.layer: WlrLayer.Overlay
@@ -112,9 +111,9 @@ Scope {
                 anchors.top: parent.top; anchors.topMargin: parent.height * 0.15
                 width: 620; height: 420
                 radius: 20
-                color: Qt.rgba(colors.bg.r, colors.bg.g, colors.bg.b, 0.97)
+                color: Qt.rgba(Colors.bg.r, Colors.bg.g, Colors.bg.b, 0.97)
                 border.width: 1
-                border.color: Qt.rgba(colors.fg.r, colors.fg.g, colors.fg.b, 0.06)
+                border.color: Qt.rgba(Colors.fg.r, Colors.fg.g, Colors.fg.b, 0.06)
 
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 16; spacing: 12
@@ -122,21 +121,21 @@ Scope {
                     // Search field
                     Rectangle {
                         Layout.fillWidth: true; height: 48; radius: 12
-                        color: colors.bgHighlight
+                        color: Colors.bgHighlight
 
                         RowLayout {
                             anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; spacing: 8
 
                             Text {
                                 text: "󰍉"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 18
-                                color: colors.fgMuted; Layout.alignment: Qt.AlignVCenter
+                                color: Colors.fgMuted; Layout.alignment: Qt.AlignVCenter
                             }
 
                             TextInput {
                                 id: searchInput
                                 Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter
                                 font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 18
-                                color: colors.fg
+                                color: Colors.fg
                                 clip: true
                                 focus: root.visible
                                 onTextChanged: { root.searchText = text; appList.currentIndex = 0 }
@@ -167,7 +166,7 @@ Scope {
                                     visible: searchInput.text === ""
                                     text: "Search apps..."
                                     font: searchInput.font
-                                    color: colors.fgMuted
+                                    color: Colors.fgMuted
                                 }
                             }
                         }
@@ -187,7 +186,7 @@ Scope {
                             required property var modelData
                             required property int index
                             width: appList.width; height: 48; radius: 10
-                            color: (index === appList.currentIndex || appMA.containsMouse) ? Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.12) : "transparent"
+                            color: (index === appList.currentIndex || appMA.containsMouse) ? Qt.rgba(Colors.accent.r, Colors.accent.g, Colors.accent.b, 0.12) : "transparent"
 
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10; spacing: 10
@@ -204,14 +203,14 @@ Scope {
                                     Text {
                                         text: modelData.name
                                         font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 15; font.weight: Font.Bold
-                                        color: colors.fg; elide: Text.ElideRight
+                                        color: Colors.fg; elide: Text.ElideRight
                                         Layout.fillWidth: true
                                     }
                                     Text {
                                         visible: (modelData.genericName || "") !== ""
                                         text: modelData.genericName || ""
                                         font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11
-                                        color: colors.fgMuted; elide: Text.ElideRight
+                                        color: Colors.fgMuted; elide: Text.ElideRight
                                         Layout.fillWidth: true
                                     }
                                 }
@@ -229,7 +228,7 @@ Scope {
                     Text {
                         text: root.filteredApps.length + " apps"
                         font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11
-                        color: colors.fgMuted; Layout.alignment: Qt.AlignRight
+                        color: Colors.fgMuted; Layout.alignment: Qt.AlignRight
                     }
                 }
             }
