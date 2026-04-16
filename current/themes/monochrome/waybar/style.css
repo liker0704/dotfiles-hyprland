@@ -11,7 +11,7 @@
 
 #waybar {
   background: transparent;
-  color: #cdd6f4;
+  color: #5c6a72;
   margin: 0;
   font-weight: 500;
 }
@@ -26,11 +26,11 @@
 #backlight,
 #battery,
 #custom-power {
-  background-color: #1e1e2e;
+  background-color: #fffbef;
   padding: 0.25rem 0.6rem;
   margin: 3px 2px;
   border-radius: 4px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   transition: background-color 0.2s ease-in-out;
 }
 
@@ -40,7 +40,7 @@
 }
 
 #workspaces button {
-  color: #6c7087;
+  color: #b5b9b6;
   border-radius: 3px;
   padding: 0.2rem 0.4rem;
   margin: 0 1px;
@@ -50,18 +50,18 @@
 }
 
 #workspaces button.active {
-  color: #1e1e2e;
-  background-color: #a6adc8;
+  color: #fffbef;
+  background-color: #5c6a72;
 }
 
 #workspaces button:hover {
-  background: #2a2a3b;
-  color: #cdd6f4;
+  background: #f3f0e6;
+  color: #5c6a72;
 }
 
 /* --- Clock --- */
 #clock {
-  color: #a6adc8;
+  color: #5c6a72;
   font-weight: 600;
 }
 
@@ -90,48 +90,48 @@
 
 /* --- Focus Mode indicator --- */
 #custom-focus {
-  background-color: #2a2a3b;
+  background-color: #f3f0e6;
   padding: 0.25rem 0.6rem 0.25rem 0.4rem;
   margin: 3px 2px;
   margin-right: 6px;
   border-radius: 4px;
-  color: #a6adc8;
+  color: #5c6a72;
   font-size: 14px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 #custom-focus:hover {
-  background-color: #4f5165;
+  background-color: #d1d2cc;
 }
 
 /* --- Language indicator --- */
 #language {
-  background-color: #1e1e2e;
+  background-color: #fffbef;
   padding: 0.25rem 0.6rem;
   margin: 3px 2px;
   margin-right: 6px;
   border-radius: 4px;
-  border: 1px solid #4f5165;
-  color: #9399b2;
+  border: 1px solid #d1d2cc;
+  color: #91999b;
   font-weight: 600;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 #language:hover {
-  background-color: #2a2a3b;
-  color: #a6adc8;
+  background-color: #f3f0e6;
+  color: #5c6a72;
 }
 
 /* --- Power button separate --- */
 #custom-power {
   margin-left: 3px;
   margin-right: 4px;
-  color: #6c7087;
+  color: #b5b9b6;
 }
 
 #custom-power:hover {
-  background-color: #2a2a3b;
-  color: #f38ba8;
+  background-color: #f3f0e6;
+  color: #f85552;
 }
 
 /* --- Hover effects --- */
@@ -143,70 +143,70 @@
 #pulseaudio:hover,
 #backlight:hover,
 #battery:hover {
-  background-color: #2a2a3b;
+  background-color: #f3f0e6;
 }
 
 /* --- Module colors --- */
 #bluetooth {
-  color: #6c7087;
+  color: #b5b9b6;
   font-size: 15px;
 }
 
 #bluetooth.connected {
-  color: #a6adc8;
+  color: #5c6a72;
 }
 
 #network {
-  color: #9399b2;
+  color: #91999b;
 }
 
 #network.disconnected {
-  color: #f38ba8;
+  color: #f85552;
 }
 
 #pulseaudio {
-  color: #cdd6f4;
+  color: #5c6a72;
 }
 
 #pulseaudio.muted {
-  color: #6c7087;
+  color: #b5b9b6;
 }
 
 #backlight {
-  color: #9399b2;
+  color: #91999b;
 }
 
 #battery {
-  color: #cdd6f4;
+  color: #5c6a72;
 }
 
 #battery.charging {
-  color: #9399b2;
+  color: #91999b;
 }
 
 #battery.warning:not(.charging) {
-  color: #f38ba8;
+  color: #f85552;
 }
 
 #battery.critical:not(.charging) {
-  color: #f38ba8;
+  color: #f85552;
   animation: blink 0.5s steps(12) infinite alternate;
 }
 
 @keyframes blink {
-  to { color: #6c7087; }
+  to { color: #b5b9b6; }
 }
 
 /* --- Tooltip --- */
 tooltip {
-  background-color: #1e1e2e;
-  color: #cdd6f4;
+  background-color: #fffbef;
+  color: #5c6a72;
   padding: 8px 14px;
   border-radius: 8px;
-  border: 1px solid #4f5165;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid #d1d2cc;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 tooltip label {
-  color: #cdd6f4;
+  color: #5c6a72;
 }
