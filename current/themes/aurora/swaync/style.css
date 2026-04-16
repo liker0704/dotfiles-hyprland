@@ -9,19 +9,22 @@
 /* Notification window (the whole popup overlay) */
 .notification-row {
   outline: none;
-  margin-top: 10px;
-  border-radius: 20px;
+  margin: 6px 6px 16px 6px;
+  padding: 0;
+  overflow: visible;
+}
+
+.notification-row .notification-background {
+  overflow: visible;
 }
 
 /* Individual notification card */
 .notification {
   border-radius: 20px;
-  background: rgba(24, 26, 33, 0.88);
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: rgba(24, 26, 33, 0.97);
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(122, 168, 255, 0.12);
-  margin: 6px 12px;
+  margin: 20px 22px;
   padding: 0;
   animation: slide-fade 220ms cubic-bezier(0.05, 0.9, 0.1, 1.05);
 }
@@ -82,7 +85,7 @@
   padding: 0;
   border-radius: 999px;
   margin: 8px;
-  box-shadow: none;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.70);
   min-width: 24px;
   min-height: 24px;
 }
@@ -95,9 +98,9 @@
 /* Control center (swaync-control-center) */
 .control-center {
   border-radius: 22px;
-  background: rgba(15, 16, 20, 0.94);
+  background: rgba(15, 16, 20, 0.98);
   border: 1px solid rgba(122, 168, 255, 0.15);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.70);
   padding: 12px;
 }
 

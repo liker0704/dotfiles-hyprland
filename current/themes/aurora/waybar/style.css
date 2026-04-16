@@ -28,7 +28,7 @@
 #backlight,
 #battery,
 #custom-power {
-  background-color: rgba(24, 26, 33, 0.72);
+  background-color: rgba(24, 26, 33, 0.97);
   color: #cdd1e4;
   padding: 0.25rem 0.85rem;
   margin: 5px 4px;
@@ -51,7 +51,7 @@
 #backlight:hover,
 #battery:hover,
 #custom-power:hover {
-  background-color: rgba(40, 44, 58, 0.85);
+  background-color: rgba(40, 44, 58, 0.99);
   box-shadow:
     0 4px 18px rgba(122, 168, 255, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -112,12 +112,6 @@
 #battery.warning:not(.charging)  { color: #ffd580; }
 #battery.critical:not(.charging) {
   color: #ff6b7a;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.55; }
 }
 
 /* Pulseaudio muted */

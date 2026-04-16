@@ -174,7 +174,12 @@ copy_dir() {
       had_protected=1
     else
       mkdir -p "$(dirname "$target")"
-      cp -a "$f" "$target"
+      if [[ -d "$f" ]]; then
+        mkdir -p "$target"
+        cp -a "$f"/. "$target/"
+      else
+        cp -a "$f" "$target"
+      fi
     fi
   done < <(find "$abs_src" -mindepth 1 -maxdepth 1 -print0)
   (( had_protected == 0 )) && log_ok "${label}/"
