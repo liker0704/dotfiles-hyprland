@@ -180,9 +180,13 @@ apply_image_wallpaper() {
 
   swww img -o "$focused_monitor" "$image_path" $SWWW_PARAMS
 
-  # Run additional scripts (pass the image path to avoid cache race conditions)
+  # Run wallust (generates palette.conf + all color templates from wallpaper)
   "$SCRIPTSDIR/WallustSwww.sh" "$image_path"
-  sleep 2
+
+  # Sync theme to all apps (quickshell, hyprland, kitty, etc.)
+  "$HOME/.local/bin/theme" sync &
+
+  sleep 1
   "$SCRIPTSDIR/Refresh.sh"
   sleep 1
 

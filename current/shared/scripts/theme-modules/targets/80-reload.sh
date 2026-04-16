@@ -1,5 +1,11 @@
 # Reload all applications
 
+# Tmux
+if pgrep -x tmux &>/dev/null; then
+  tmux source-file ~/.config/tmux/tmux.conf 2>/dev/null
+  echo -e "    ${GREEN}tmux reloaded${RESET}"
+fi
+
 # Kitty
 if pgrep -x kitty &>/dev/null; then
   kill -SIGUSR1 $(pgrep -x kitty) 2>/dev/null
