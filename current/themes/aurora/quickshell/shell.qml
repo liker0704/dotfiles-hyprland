@@ -5,6 +5,7 @@ import QtQuick
 import "notifications"
 import "osd"
 import "session"
+import "launcher"
 
 Scope {
     Variants {
@@ -19,4 +20,5 @@ Scope {
     NotificationPopup {}
     OSD {}
     SessionMenu {}
+    AppLauncher {}
 }
