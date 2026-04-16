@@ -34,6 +34,20 @@ fi
 # Result: one unified hue family (accent + secondary + surfaces all share the
 # wallust-picked tone). Falls back to image-based scheme if no accent yet.
 MATUGEN_CONFIG="$HOME/.config/matugen/config.toml"
+QS_JSON="$HOME/.local/state/quickshell/generated/colors.json"
+
+# Fast path: WallpaperSelect.sh cp's from ~/.cache/wallpaper-md3/ and touches
+# QS_JSON newer than PALETTE. If QS_JSON is fresher than PALETTE, skip matugen.
+if [[ -f "$QS_JSON" && -f "$PALETTE" && "$QS_JSON" -nt "$PALETTE" ]]; then
+  echo -e "  \033[0;32mmatugen\033[0m (cached)"
+  # Still refresh accent_secondary from cached JSON (no-op if unchanged)
+  secondary=$(python3 -c "import json,sys; print(json.load(open('$QS_JSON'))['md3'].get('secondary','').lstrip('#'))" 2>/dev/null)
+  if [[ -n "$secondary" ]]; then
+    sed -i "s/^accent_secondary=.*/accent_secondary=$secondary/" "$PALETTE"
+  fi
+  return 0 2>/dev/null || exit 0
+fi
+
 seed=""
 if [[ -f "$PALETTE" ]]; then
   seed=$(grep '^accent=' "$PALETTE" | head -1 | cut -d= -f2 | tr -d ' \r\n')
@@ -57,7 +71,6 @@ fi
 
 # Update accent_secondary in palette.conf with matugen's harmonized secondary.
 # accent itself stays as wallust pick (the seed) — that's the source tone.
-QS_JSON="$HOME/.local/state/quickshell/generated/colors.json"
 if [[ -f "$QS_JSON" && -f "$PALETTE" ]]; then
   secondary=$(python3 -c "import json,sys; print(json.load(open('$QS_JSON'))['md3'].get('secondary','').lstrip('#'))" 2>/dev/null)
   if [[ -n "$secondary" ]]; then

@@ -1,11 +1,16 @@
 #!/bin/bash
-# Pre-generate palette cache for all wallpapers
-# Palettes saved to ~/.cache/wallpaper-palettes/{hash}.conf
-# Does NOT change current theme — only builds cache for instant Super+W switching
+# Pre-generate palette + matugen MD3 cache for all wallpapers.
+# Palettes saved to:
+#   ~/.cache/wallpaper-palettes/{hash}.conf  — wallust ANSI + accent
+#   ~/.cache/wallpaper-md3/{hash}.json       — matugen MD3 (seeded by accent)
+# Does NOT change current theme — only builds cache for instant Super+W switching.
 
 CACHE_DIR="$HOME/.cache/wallpaper-palettes"
+MD3_CACHE_DIR="$HOME/.cache/wallpaper-md3"
 WALL_DIR="$HOME/Pictures/wallpapers"
 PALETTE="$HOME/.config/theme/palette.conf"
+MATUGEN_CONFIG="$HOME/.config/matugen/config.toml"
+MATUGEN_OUT="$HOME/.local/state/quickshell/generated/colors.json"
 
 # Temporary wallust config: only generates palette.conf template
 TEMP_WALLUST_DIR=$(mktemp -d)
@@ -27,7 +32,17 @@ TOMLEOF
 # Target is set to our temp file, not the real palette.conf
 printf 'palette.target = "%s/out-palette.conf"\n' "$TEMP_WALLUST_DIR" >> "$TEMP_WALLUST_CONF"
 
-mkdir -p "$CACHE_DIR"
+mkdir -p "$CACHE_DIR" "$MD3_CACHE_DIR"
+
+# Save current matugen output so we can restore it after the loop
+SAVED_MD3=""
+if [[ -f "$MATUGEN_OUT" ]]; then
+  SAVED_MD3=$(mktemp)
+  cp "$MATUGEN_OUT" "$SAVED_MD3"
+fi
+
+HAS_MATUGEN=false
+command -v matugen &>/dev/null && HAS_MATUGEN=true
 
 count=0
 skipped=0
@@ -39,38 +54,63 @@ echo "Pre-caching palettes for $total wallpapers..."
 while read -r img; do
     hash=$(echo "$img" | md5sum | cut -c1-12)
     cache_file="$CACHE_DIR/${hash}.conf"
+    md3_cache="$MD3_CACHE_DIR/${hash}.json"
     count=$((count + 1))
 
-    if [[ -f "$cache_file" ]]; then
+    palette_done=false; md3_done=false
+    [[ -f "$cache_file" ]] && palette_done=true
+    [[ ! $HAS_MATUGEN || -f "$md3_cache" ]] && md3_done=true
+
+    if $palette_done && $md3_done; then
         skipped=$((skipped + 1))
         continue
     fi
 
     echo "[$count/$total] $(basename "$img")"
 
-    # Run wallust with:
-    #   -s = skip terminal sequences (don't change current terminal colors)
-    #   -C = use temp config (only palette template, no kitty/hypr/rofi/waybar)
-    #   --templates-dir = look for templates in our temp dir
-    wallust run -s -C "$TEMP_WALLUST_CONF" --templates-dir "$TEMP_WALLUST_DIR" "$img" 2>/dev/null
+    # Wallust palette (if missing)
+    if ! $palette_done; then
+        # -s = skip terminal sequences  -C = use temp config  --templates-dir = look for templates in our temp dir
+        wallust run -s -C "$TEMP_WALLUST_CONF" --templates-dir "$TEMP_WALLUST_DIR" "$img" 2>/dev/null
 
-    GENERATED="$TEMP_WALLUST_DIR/out-palette.conf"
-    if [[ ! -f "$GENERATED" ]]; then
-        echo "  WARN: wallust produced no output, skipping"
-        continue
+        GENERATED="$TEMP_WALLUST_DIR/out-palette.conf"
+        if [[ ! -f "$GENERATED" ]]; then
+            echo "  WARN: wallust produced no output, skipping"
+            continue
+        fi
+
+        # Fix derived colors + auto-accent selection
+        python3 "$HOME/.local/bin/theme-palette-postprocess.py" "$GENERATED"
+        cp "$GENERATED" "$cache_file"
     fi
 
-    # Fix derived colors with blend() + auto-accent selection
-    python3 "$HOME/.local/bin/theme-palette-postprocess.py" "$GENERATED"
-
-    # Save to cache
-    cp "$GENERATED" "$cache_file"
+    # Matugen MD3 (if missing) — seeded by wallust accent for harmony
+    if $HAS_MATUGEN && ! $md3_done; then
+        seed=$(grep '^accent=' "$cache_file" | head -1 | cut -d= -f2 | tr -d ' \r\n')
+        if [[ -n "$seed" ]]; then
+            if [[ -f "$MATUGEN_CONFIG" ]]; then
+                matugen color hex "#$seed" -c "$MATUGEN_CONFIG" 2>/dev/null
+            else
+                matugen color hex "#$seed" 2>/dev/null
+            fi
+            if [[ -f "$MATUGEN_OUT" ]]; then
+                cp "$MATUGEN_OUT" "$md3_cache"
+            fi
+        fi
+    fi
 done < <(find "$WALL_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" \))
+
+# Restore current matugen output (we used it as a temp scratch file)
+if [[ -n "$SAVED_MD3" && -f "$SAVED_MD3" ]]; then
+    cp "$SAVED_MD3" "$MATUGEN_OUT"
+    rm -f "$SAVED_MD3"
+fi
 
 # Cleanup temp dir
 rm -rf "$TEMP_WALLUST_DIR"
 
 echo ""
 echo "Done! Cached palettes in $CACHE_DIR"
+$HAS_MATUGEN && echo "       Cached MD3 in $MD3_CACHE_DIR"
 echo "Skipped $skipped already cached, processed $((count - skipped))."
 echo "Current theme unchanged."
