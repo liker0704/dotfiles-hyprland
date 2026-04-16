@@ -32,9 +32,9 @@ if pgrep -x waybar &>/dev/null; then
 fi
 
 # SwayNC
-if pgrep -x swaync &>/dev/null; then
-  swaync-client -rs &>/dev/null
-  echo -e "    ${GREEN}swaync reloaded${RESET}"
+# if pgrep -x swaync &>/dev/null; then
+#   swaync-client -rs &>/dev/null
+#   echo -e "    ${GREEN}swaync reloaded${RESET}"
 fi
 
 # --- Helper: save window state (workspace, monitor, floating) by class ---

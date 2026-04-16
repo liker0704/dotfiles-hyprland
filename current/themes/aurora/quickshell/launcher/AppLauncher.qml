@@ -33,13 +33,31 @@ Scope {
 
         var q = searchText.toLowerCase()
         var filtered = list.filter(function(e) {
-            return (e.name || "").toLowerCase().indexOf(q) >= 0 ||
-                   (e.genericName || "").toLowerCase().indexOf(q) >= 0
+            if ((e.name || "").toLowerCase().indexOf(q) >= 0) return true
+            if ((e.genericName || "").toLowerCase().indexOf(q) >= 0) return true
+            // Search keywords
+            var kw = e.keywords || []
+            for (var k = 0; k < kw.length; k++) {
+                if (kw[k].toLowerCase().indexOf(q) >= 0) return true
+            }
+            // Search categories
+            var cats = e.categories || []
+            for (var c = 0; c < cats.length; c++) {
+                if (cats[c].toLowerCase().indexOf(q) >= 0) return true
+            }
+            // Search description
+            if ((e.comment || "").toLowerCase().indexOf(q) >= 0) return true
+            return false
         })
         filtered.sort(function(a, b) {
-            var aStart = a.name.toLowerCase().indexOf(q) === 0
-            var bStart = b.name.toLowerCase().indexOf(q) === 0
-            if (aStart !== bStart) return aStart ? -1 : 1
+            // Name match = highest priority
+            var aName = (a.name || "").toLowerCase().indexOf(q) === 0
+            var bName = (b.name || "").toLowerCase().indexOf(q) === 0
+            if (aName !== bName) return aName ? -1 : 1
+            // Name contains > keyword match
+            var aHas = (a.name || "").toLowerCase().indexOf(q) >= 0
+            var bHas = (b.name || "").toLowerCase().indexOf(q) >= 0
+            if (aHas !== bHas) return aHas ? -1 : 1
             return a.name.localeCompare(b.name)
         })
         return filtered

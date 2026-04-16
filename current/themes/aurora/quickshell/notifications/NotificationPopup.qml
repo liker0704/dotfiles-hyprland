@@ -15,15 +15,17 @@ Scope {
             required property var modelData
             screen: modelData
             Colors { id: colors }
-            visible: true
-            implicitHeight: NotificationService.count > 0 ? notifCol.implicitHeight + 60 : 0
+            visible: NotificationService.count > 0
             focusable: false
             color: "transparent"
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
             exclusionMode: ExclusionMode.Ignore
-            anchors { top: true; left: true; right: true }
-            implicitWidth: NotificationService.count > 0 ? 400 : 0
+            // Don't block clicks — only cover notification area
+            anchors { top: true }
+            anchors.horizontalCenter: true
+            implicitWidth: 420
+            implicitHeight: notifCol.implicitHeight + 60
 
 
             ColumnLayout {
@@ -52,7 +54,7 @@ Scope {
                         Rectangle {
                             id: card
                             width: parent.width
-                            height: cardCol.implicitHeight + 24
+                            height: cardCol.childrenRect.height + 24
                             radius: Appearance.rounding.large
                             color: Qt.rgba(colors.bg.r, colors.bg.g, colors.bg.b, Appearance.notif.bgAlpha)
                             antialiasing: true
