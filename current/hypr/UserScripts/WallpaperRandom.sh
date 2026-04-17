@@ -19,7 +19,12 @@ BEZIER=".43,1.19,1,.4"
 SWWW_PARAMS="--transition-fps $FPS --transition-type $TYPE --transition-duration $DURATION --transition-bezier $BEZIER"
 
 
-swww query || swww-daemon --format xrgb && swww img ${RANDOMPICS} $SWWW_PARAMS
+# Ensure daemon is running (precedence-safe)
+if ! swww query >/dev/null 2>&1; then
+  swww-daemon --format xrgb &
+  sleep 0.2
+fi
+swww img "${RANDOMPICS}" ${SWWW_PARAMS}
 
 wait $!
 "$SCRIPTSDIR/WallustSwww.sh" &&

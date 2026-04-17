@@ -45,6 +45,7 @@ Scope {
                 focus: true
                 Keys.onPressed: event => {
                     if (event.key === Qt.Key_Escape) { root.hide(); return }
+                    if (event.modifiers !== Qt.NoModifier) return
                     for (var i = 0; i < root.actions.length; i++) {
                         if (event.key === root.actions[i].key) {
                             execAction(root.actions[i].cmd)

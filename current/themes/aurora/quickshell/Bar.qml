@@ -113,7 +113,7 @@ PanelWindow {
                     }
                     Rectangle {
                         required property var modelData
-                        property bool isActive: modelData.id === bar.monitor.activeWorkspace?.id
+                        property bool isActive: modelData.id === bar.monitor?.activeWorkspace?.id
                         Layout.preferredWidth: 30; Layout.preferredHeight: 30; radius: 9
                         color: isActive ? Md3.md3.primary : "transparent"
                         Behavior on color { ColorAnimation { duration: 150 } }
