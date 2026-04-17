@@ -5,6 +5,7 @@ import Quickshell.Services.Notifications
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Effects
+import ".."
 
 Scope {
     id: root

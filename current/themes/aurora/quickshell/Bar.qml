@@ -184,11 +184,16 @@ PanelWindow {
                 id: statusRow; anchors.centerIn: parent; spacing: 10
 
                 // Volume (click = popup, scroll = volume)
-                RowLayout {
+                Item {
                     id: volumeArea
-                    spacing: 4; Layout.alignment: Qt.AlignVCenter
-                    Text { text: bar.volumeMuted ? "󰝟" : "󰕾"; font.family: Appearance.font.mono; font.pixelSize: 16; color: bar.volumeMuted ? Colors.fgMuted : Md3.md3.primary; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
-                    Text { text: bar.volumePercent + "%"; font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold; color: Colors.fgDim; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
+                    Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: volumeRow.implicitWidth
+                    implicitHeight: volumeRow.implicitHeight
+                    RowLayout {
+                        id: volumeRow; anchors.fill: parent; spacing: 4
+                        Text { text: bar.volumeMuted ? "󰝟" : "󰕾"; font.family: Appearance.font.mono; font.pixelSize: 16; color: bar.volumeMuted ? Colors.fgMuted : Md3.md3.primary; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
+                        Text { text: bar.volumePercent + "%"; font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold; color: Colors.fgDim; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
+                    }
                     MouseArea {
                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: volumePopup.toggle()
@@ -199,33 +204,43 @@ PanelWindow {
                 Sep {}
 
                 // Network (click = nm-connection-editor)
-                RowLayout {
-                    spacing: 4; Layout.alignment: Qt.AlignVCenter
-                    Text { text: bar.networkType === "wifi" ? "󰤢" : (bar.networkConnected ? "󰈀" : "󰤠"); font.family: Appearance.font.mono; font.pixelSize: 17; color: bar.networkConnected ? Md3.md3.primary : Colors.fgMuted; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
-                    Text { visible: bar.networkType === "wifi" && bar.networkName.length > 0; text: bar.networkName; font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold; color: Colors.fgDim; elide: Text.ElideRight; Layout.maximumWidth: 100; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
+                Item {
+                    Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: networkRow.implicitWidth
+                    implicitHeight: networkRow.implicitHeight
+                    RowLayout {
+                        id: networkRow; anchors.fill: parent; spacing: 4
+                        Text { text: bar.networkType === "wifi" ? "󰤢" : (bar.networkConnected ? "󰈀" : "󰤠"); font.family: Appearance.font.mono; font.pixelSize: 17; color: bar.networkConnected ? Md3.md3.primary : Colors.fgMuted; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
+                        Text { visible: bar.networkType === "wifi" && bar.networkName.length > 0; text: bar.networkName; font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold; color: Colors.fgDim; elide: Text.ElideRight; Layout.maximumWidth: 100; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
+                    }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Quickshell.exec(["nm-connection-editor"]) }
                 }
 
                 Sep {}
 
                 // Battery (click = popup with power profiles)
-                RowLayout {
+                Item {
                     id: batteryArea
-                    spacing: 4; Layout.alignment: Qt.AlignVCenter
-                    Canvas {
-                        Layout.preferredWidth: 20; Layout.preferredHeight: 20; Layout.alignment: Qt.AlignVCenter
-                        property real pct: bar.batteryPercent / 100.0
-                        onPctChanged: requestPaint()
-                        onPaint: {
-                            var ctx = getContext("2d"); ctx.clearRect(0, 0, width, height)
-                            var cx = width/2, cy = height/2, r = 8
-                            ctx.lineWidth = 2.5; ctx.lineCap = "round"
-                            ctx.strokeStyle = Qt.rgba(1,1,1,0.08); ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI); ctx.stroke()
-                            ctx.strokeStyle = bar.batteryCharging ? Md3.md3.primary : (bar.batteryPercent > 20 ? Md3.md3.primary : Md3.md3.error)
-                            ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + pct*2*Math.PI); ctx.stroke()
+                    Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: batteryRow.implicitWidth
+                    implicitHeight: batteryRow.implicitHeight
+                    RowLayout {
+                        id: batteryRow; anchors.fill: parent; spacing: 4
+                        Canvas {
+                            Layout.preferredWidth: 20; Layout.preferredHeight: 20; Layout.alignment: Qt.AlignVCenter
+                            property real pct: bar.batteryPercent / 100.0
+                            onPctChanged: requestPaint()
+                            onPaint: {
+                                var ctx = getContext("2d"); ctx.clearRect(0, 0, width, height)
+                                var cx = width/2, cy = height/2, r = 8
+                                ctx.lineWidth = 2.5; ctx.lineCap = "round"
+                                ctx.strokeStyle = Qt.rgba(1,1,1,0.08); ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI); ctx.stroke()
+                                ctx.strokeStyle = bar.batteryCharging ? Md3.md3.primary : (bar.batteryPercent > 20 ? Md3.md3.primary : Md3.md3.error)
+                                ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + pct*2*Math.PI); ctx.stroke()
+                            }
                         }
+                        Text { text: bar.batteryPercent + "%"; font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold; color: Colors.fgDim; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
                     }
-                    Text { text: bar.batteryPercent + "%"; font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold; color: Colors.fgDim; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: batteryPopup.toggle() }
                 }
 
