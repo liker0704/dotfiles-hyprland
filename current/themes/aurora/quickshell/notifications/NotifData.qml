@@ -27,8 +27,12 @@ QtObject {
         }
     }
 
+    // Timer must NOT pause on hover — Qt Timer restarts from 0 when running
+    // toggles true→false→true, so the old notification's countdown gets reset
+    // whenever mouse hovers (incl. when a new notification appears at the same
+    // spot and the cursor is there). Result: old notifs stayed forever.
     readonly property Timer _timer: Timer {
-        running: !root.closed && !root.hovered && root.urgency !== NotificationUrgency.Critical
+        running: !root.closed && root.urgency !== NotificationUrgency.Critical
         interval: root.expireTimeout * 1000
         onTriggered: root.dismiss()
     }
