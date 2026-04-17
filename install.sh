@@ -286,11 +286,26 @@ for map in "${FILE_MAPS[@]}"; do
   copy_file "$SHARED_SRC/$src" "$dst" "shared/${src} → ${dst#$REAL_HOME/}"
 done
 
-# Make scripts executable
+# Make scripts executable — covers every .sh / .py in user-script dirs.
+# cp -a should preserve bits, but on copy from FAT/NTFS or via clipboard /
+# rsync-without-p the +x bit is lost — set it explicitly to be safe.
 chmod +x "$REAL_HOME/.local/bin/theme" \
          "$REAL_HOME/.local/bin/mpvpaper-stop" \
          "$REAL_HOME/.local/bin/pc" \
          "$REAL_HOME/.local/bin/kitty-raw" 2>/dev/null || true
+
+for _script_dir in \
+  "$REAL_HOME/.local/bin" \
+  "$REAL_HOME/.local/share/theme/targets" \
+  "$REAL_HOME/.local/share/theme/lib" \
+  "$REAL_HOME/.local/share/theme/commands" \
+  "$REAL_HOME/.config/hypr/scripts" \
+  "$REAL_HOME/.config/hypr/UserScripts" \
+  "$REAL_HOME/.claude/hooks"; do
+  [[ -d "$_script_dir" ]] || continue
+  find "$_script_dir" -maxdepth 2 -type f \( -name "*.sh" -o -name "*.py" \) \
+    -exec chmod +x {} + 2>/dev/null || true
+done
 
 # --- Fix ownership (running as sudo) ---
 chown -R "$REAL_USER:$REAL_USER" \
