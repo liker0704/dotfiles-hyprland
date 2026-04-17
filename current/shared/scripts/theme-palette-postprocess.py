@@ -128,6 +128,27 @@ def fix_ansi(palette: dict[str, str], seed_hex: str, is_dark_bg: bool) -> None:
             finalized.discard(palette[bright_key].lower())  # don't block re-use
             finalized.add(palette[bright_key].lower())
 
+    # Fix 4: grey-pair distinction (black/bright_black, white/bright_white).
+    # ANSI_TARGETS only covers the 6 hues; wallust can leave white == bright_white
+    # (or black == bright_black), making bold-white indistinguishable.
+    # Anchor on dark_l/light_l (= min/max of bg_l, fg_l) so slots are semantic
+    # regardless of theme mode: black always sits near the dark end, white near
+    # the light end.
+    dark_l = min(bg_l, fg_l)
+    light_l = max(bg_l, fg_l)
+    hue_frac = (seed_h / 360) if seed_h > 0 else 0
+    for normal_key, bright_key, n_mix, b_mix in [
+        ('black', 'bright_black', 0.20, 0.45),  # 20%/45% from dark anchor
+        ('white', 'bright_white', 0.85, 1.00),  # 85%/100% toward light anchor
+    ]:
+        n_l = hex_to_hls(palette[normal_key])[1] if normal_key in palette else -1
+        b_l = hex_to_hls(palette[bright_key])[1] if bright_key in palette else -1
+        if abs(b_l - n_l) < 0.06 or n_l < 0 or b_l < 0:
+            target_n_l = dark_l + (light_l - dark_l) * n_mix
+            target_b_l = dark_l + (light_l - dark_l) * b_mix
+            palette[normal_key] = hls_to_hex(hue_frac, target_n_l, 0.05)
+            palette[bright_key] = hls_to_hex(hue_frac, target_b_l, 0.05)
+
 
 def main(path: str) -> None:
     palette: dict[str, str] = {}
