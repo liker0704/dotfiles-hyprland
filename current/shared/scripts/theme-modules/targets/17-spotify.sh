@@ -29,8 +29,15 @@ cat > "$SPICETIFY_DIR/user.css" << 'EOF'
 /* minimal — just colors */
 EOF
 
-# Apply
-spicetify config current_theme Generated 2>/dev/null
-spicetify apply 2>/dev/null
+# Apply. Requires /opt/spotify writable (`sudo chmod -R a+wr /opt/spotify`);
+# without it spicetify prints a scary "fatal: permission denied". Suppress
+# stdout too so target output stays clean — user sees green label only.
+spicetify config current_theme Generated >/dev/null 2>&1
+spicetify apply >/dev/null 2>&1
 
-echo -e "    ${GREEN}spotify (spicetify)${RESET}"
+# Detect missing perms so user gets an actionable hint instead of silence.
+if [[ ! -w /opt/spotify/Apps/xpui.spa ]]; then
+    echo -e "    ${GREEN}spotify (spicetify)${RESET} — config written; run 'sudo chmod -R a+wr /opt/spotify' to enable apply"
+else
+    echo -e "    ${GREEN}spotify (spicetify)${RESET}"
+fi
