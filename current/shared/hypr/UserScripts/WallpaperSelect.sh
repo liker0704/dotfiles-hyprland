@@ -178,7 +178,10 @@ apply_image_wallpaper() {
     swww-daemon --format xrgb &
   fi
 
-  swww img -o "$focused_monitor" "$image_path" $SWWW_PARAMS
+  # Apply to all monitors — single wallpaper everywhere eliminates the
+  # multi-monitor palette-detection race where changing wallpaper on a
+  # non-focused monitor left the palette tied to the focused one.
+  swww img "$image_path" $SWWW_PARAMS
 
   # Apply wallpaper-matched palette (cached or live).
   # MD3 JSON cache is handled inside theme sync's 05-matugen.sh by hashing
