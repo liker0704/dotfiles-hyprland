@@ -178,11 +178,31 @@ apply_image_wallpaper() {
     swww-daemon --format xrgb &
   fi
 
+  # Apply to all monitors — single wallpaper everywhere eliminates the
+  # multi-monitor palette-detection race where changing wallpaper on a
+  # non-focused monitor left the palette tied to the focused one.
   swww img "$image_path" $SWWW_PARAMS
 
-  # Run additional scripts (pass the image path to avoid cache race conditions)
-  "$SCRIPTSDIR/WallustSwww.sh" "$image_path"
-  sleep 2
+  # Apply wallpaper-matched palette (cached or live).
+  # MD3 JSON cache is handled inside theme sync's 05-matugen.sh by hashing
+  # the current swww wallpaper path — same hash scheme used here.
+  local CACHE_DIR="$HOME/.cache/wallpaper-palettes"
+  local hash=$(echo "$image_path" | md5sum | cut -c1-12)
+  local cache_file="$CACHE_DIR/${hash}.conf"
+
+  if [[ -f "$cache_file" ]]; then
+    cp "$cache_file" "$HOME/.config/theme/palette.conf"
+  else
+    "$SCRIPTSDIR/WallustSwww.sh" "$image_path"
+    python3 "$HOME/.local/bin/theme-palette-postprocess.py" "$HOME/.config/theme/palette.conf"
+    mkdir -p "$CACHE_DIR"
+    cp "$HOME/.config/theme/palette.conf" "$cache_file"
+  fi
+
+  # Sync theme to all apps
+  "$HOME/.local/bin/theme" sync &
+
+  sleep 1
   "$SCRIPTSDIR/Refresh.sh"
   sleep 1
 
