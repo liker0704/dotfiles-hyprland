@@ -60,14 +60,21 @@ def hue_dist(h1_deg: float, h2_deg: float) -> float:
 
 
 def engineer_ansi(target_hue_deg: float, seed_hue_deg: float,
-                  is_bright: bool, is_dark_bg: bool) -> str:
+                  is_bright: bool, is_dark_bg: bool,
+                  strict: bool = False) -> str:
     """Engineer an ANSI color at canonical hue, harmonized 12° toward seed.
     Lightness/saturation tuned so:
       - normal vs bright differ by ~0.10 L (visible distinction)
       - all stay clear of black (L<0.3) and white (L>0.78)
-      - moderate saturation keeps hues distinct without neon glow."""
-    dist = ((seed_hue_deg - target_hue_deg + 540) % 360) - 180
-    shifted = (target_hue_deg + max(-12, min(12, dist))) % 360
+      - moderate saturation keeps hues distinct without neon glow.
+    strict=True disables seed-drift — used when re-engineering to resolve a
+    cross-slot hue collision (drift may pull the color back into the collision
+    zone, e.g. blue seed 203° drifts target 215° back down to 203°)."""
+    if strict:
+        shifted = target_hue_deg
+    else:
+        dist = ((seed_hue_deg - target_hue_deg + 540) % 360) - 180
+        shifted = (target_hue_deg + max(-12, min(12, dist))) % 360
 
     if is_dark_bg:
         # Normal: L=0.55  Bright: L=0.65 (gap 0.10, far from white at ~0.85)
@@ -91,6 +98,12 @@ def fix_ansi(palette: dict[str, str], seed_hex: str, is_dark_bg: bool) -> None:
         return abs(l - bg_l) > 0.22 and abs(l - fg_l) > 0.15
 
     finalized: set[str] = set()
+    finalized_hues: list[float] = []  # degrees, for cross-slot hue-distance check
+
+    # Minimum hue distance from any previously-finalized slot. If a wallust pick
+    # is within this degree window of another slot, we re-engineer at canonical.
+    # Prevents blue ≈ cyan or green ≈ cyan collisions (Fix 5).
+    MIN_CROSS_HUE_DEG = 25
 
     for name, (target_h, tol) in ANSI_TARGETS.items():
         # Process the PAIR (normal, bright) together so we can enforce
@@ -109,11 +122,25 @@ def fix_ansi(palette: dict[str, str], seed_hex: str, is_dark_bg: bool) -> None:
                 light_ok = lightness_ok(cl)
                 sat_ok = cs > 0.20
                 unique_ok = current.lower() not in finalized
-                if hue_ok and light_ok and sat_ok and unique_ok:
+                # Fix 5: cross-slot hue distance — prevents blue ≈ cyan etc.
+                # Only applied to "normal" slots; bright pair is allowed to
+                # share a hue with its normal sibling.
+                if not is_bright:
+                    cross_ok = all(hue_dist(cur_h_deg, h) >= MIN_CROSS_HUE_DEG
+                                   for h in finalized_hues)
+                else:
+                    cross_ok = True
+                if hue_ok and light_ok and sat_ok and unique_ok and cross_ok:
                     needs_fix = False
             if needs_fix:
-                palette[key] = engineer_ansi(target_h, seed_h, is_bright, is_dark_bg)
+                # Use strict=True (no seed drift) when the reason we're fixing
+                # is a cross-hue collision — otherwise drift can re-collide.
+                needs_strict = current is not None and not cross_ok and not is_bright
+                palette[key] = engineer_ansi(target_h, seed_h, is_bright,
+                                             is_dark_bg, strict=needs_strict)
             finalized.add(palette[key].lower())
+            if not is_bright:
+                finalized_hues.append(hex_to_hls(palette[key])[0] * 360)
 
         # Fix 2: enforce bright is visibly brighter than normal (>0.06 L).
         # If wallust gave both as same/dark, replace bright with engineered version.
