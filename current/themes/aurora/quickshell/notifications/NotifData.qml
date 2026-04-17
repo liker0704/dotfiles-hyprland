@@ -16,6 +16,10 @@ QtObject {
     property int urgency: NotificationUrgency.Normal
     property real expireTimeout: 5
     property bool hovered: false
+    // Wall-clock timestamp of creation — used by progress bar delegate to
+    // compute remaining time. Survives delegate recreation (when Repeater
+    // rebuilds on new notifications) so the bar doesn't reset.
+    property real createdAt: 0
 
     readonly property Connections _conn: Connections {
         target: root.notification
@@ -38,6 +42,7 @@ QtObject {
     }
 
     Component.onCompleted: {
+        createdAt = Date.now()
         if (!notification) return
         summary = notification.summary || ""
         body = notification.body || ""

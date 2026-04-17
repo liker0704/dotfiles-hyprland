@@ -133,16 +133,25 @@ Scope {
                                     }
                                 }
 
-                                // Progress bar
+                                // Progress bar — uses real wall-clock time so
+                                // each notification's bar is independent. When
+                                // the Repeater delegate is recreated (new notif),
+                                // the bar starts mid-animation based on elapsed.
                                 Rectangle {
                                     Layout.fillWidth: true; height: 2; radius: 1; color: root.theme.bgHighlight
                                     visible: cardRoot.modelData.urgency !== NotificationUrgency.Critical
                                     Rectangle {
-                                        height: parent.height; width: parent.width; radius: 1; color: root.theme.accent; opacity: 0.4
-                                        SequentialAnimation on width {
-                                            running: parent.visible
-                                            PauseAnimation { duration: 50 }
-                                            NumberAnimation { to: 0; duration: cardRoot.modelData.expireTimeout * 1000 }
+                                        id: progressFill
+                                        property real totalMs: cardRoot.modelData.expireTimeout * 1000
+                                        property real remainingMs: Math.max(0, totalMs - (Date.now() - cardRoot.modelData.createdAt))
+                                        height: parent.height; radius: 1; color: root.theme.accent; opacity: 0.4
+                                        width: parent.width * (remainingMs / totalMs)
+                                        Component.onCompleted: widthAnim.start()
+                                        NumberAnimation on width {
+                                            id: widthAnim
+                                            to: 0
+                                            duration: progressFill.remainingMs
+                                            running: false
                                         }
                                     }
                                 }
