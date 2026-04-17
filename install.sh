@@ -308,12 +308,15 @@ for _script_dir in \
 done
 
 # --- Fix ownership (running as sudo) ---
+# BACKUP_BASE is created during backup step ~line 239 as root since we run
+# under sudo — without this chown it stayed root:root and polluted HOME.
 chown -R "$REAL_USER:$REAL_USER" \
   "$REAL_HOME/.config" \
   "$REAL_HOME/.local/bin" \
   "$REAL_HOME/.local/share/theme" \
   "$REAL_HOME/.zshrc" \
   "$REAL_HOME/.p10k.zsh" \
+  "$BACKUP_BASE" \
   2>/dev/null || true
 
 # --- Meta markers ---
