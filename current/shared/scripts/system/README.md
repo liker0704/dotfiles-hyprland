@@ -12,3 +12,20 @@ sudo visudo -c  # verify
 via passwordless sudo to modify `/etc/hosts` and Chrome managed policies.
 The sudoers drop-in allows only the exact binary path — nothing else gets
 passwordless privilege escalation.
+
+## tmux-user.tmpfiles
+
+Install:
+```bash
+sudo install -m 0644 tmux-user.tmpfiles /etc/tmpfiles.d/tmux-user.conf
+sudo systemd-tmpfiles --create /etc/tmpfiles.d/tmux-user.conf
+```
+
+Ensures `/tmp/tmux-1000` is owned by `liker:liker` with `0700` perms on
+every boot. Without it, systemd-tmpfiles occasionally created the dir
+root-owned and tmux refused to attach with "unsafe permissions" —
+breaking every persistent tmux session. The `d` + `Z` combo creates if
+missing and re-asserts ownership recursively each tmpfiles run.
+
+Note: hardcoded UID 1000 / user `liker` — adjust if deploying on a system
+with a different UID or username.

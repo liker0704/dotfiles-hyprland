@@ -1,0 +1,6 @@
+# Ensure /tmp/tmux-1000 is owned by 'liker' with 700 perms on every boot.
+# systemd-tmpfiles sometimes created this root-owned, which tripped tmux's
+# "unsafe permissions" check and blocked reattach to persistent sessions.
+# 'd' creates if missing; 'Z' re-asserts ownership/mode recursively each run.
+d /tmp/tmux-1000 0700 liker liker -
+Z /tmp/tmux-1000 0700 liker liker -
