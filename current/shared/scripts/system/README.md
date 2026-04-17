@@ -29,3 +29,28 @@ missing and re-asserts ownership recursively each tmpfiles run.
 
 Note: hardcoded UID 1000 / user `liker` — adjust if deploying on a system
 with a different UID or username.
+
+## docker-daemon.json
+
+Install:
+```bash
+sudo mkdir -p /etc/docker
+sudo install -m 0644 docker-daemon.json /etc/docker/daemon.json
+sudo systemctl restart docker
+```
+
+Disables the **containerd-snapshotter** storage driver (default in Docker
+28+/29+), reverts to `overlay2`. On idle systems with the snapshotter
+enabled, dockerd constantly scans OCI image layers and burns 20-40% CPU
+with no containers running. Switching back to `overlay2` drops idle CPU
+to <2%.
+
+Also adds `log-opts` to cap container logs at 10 MB × 3 files — prevents
+JSON-file logs from filling disk on long-running containers (e.g.
+`assistant` emits 30-sec tmux polling DEBUG that piles up).
+
+Verify after restart:
+```bash
+docker info | grep -E 'Storage Driver|snapshotter'
+# → Storage Driver: overlay2   (NOT io.containerd.snapshotter.v1)
+```
