@@ -225,7 +225,17 @@ def main(path: str) -> None:
     if 'accent' in palette:
         ah, al, as_ = hex_to_hls(palette['accent'])
         if as_ < 0.25:
-            target_h = ah if as_ > 0.05 else hex_to_hls(bg)[0]
+            # Pick a hue: accent's own hue if it has any saturation; else bg's hue
+            # if bg has color. Full grayscale (both near-zero saturation) →
+            # neutral default 210° (muted blue) instead of falling through to 0°
+            # which produces a RED accent on a grayscale wallpaper.
+            bg_h, _, bg_s = hex_to_hls(bg)
+            if as_ > 0.05:
+                target_h = ah
+            elif bg_s > 0.05:
+                target_h = bg_h
+            else:
+                target_h = 210 / 360  # neutral cool-blue fallback
             new_l = max(0.55, al) if bg_l < 0.5 else min(0.45, al)
             palette['accent'] = hls_to_hex(target_h, new_l, 0.55)
 

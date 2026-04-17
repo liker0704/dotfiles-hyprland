@@ -1,6 +1,15 @@
 # Sync palette to all configs
 
 apply_palette() {
+  # Prevent concurrent sync runs (e.g. Super+W spam) from racing on
+  # palette.conf — half-written file makes QS fall back to magenta.
+  mkdir -p "$HOME/.config/theme"
+  exec 9>"$HOME/.config/theme/.sync.lock"
+  if ! flock -n 9; then
+    echo "  sync already running, skipping"
+    return 0
+  fi
+
   # Read palette and compute derived variables
   source "$THEME_LIB/palette.sh"
   read_palette
