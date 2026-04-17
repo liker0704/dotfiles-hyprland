@@ -19,7 +19,10 @@ QtObject {
     // Wall-clock timestamp of creation — used by progress bar delegate to
     // compute remaining time. Survives delegate recreation (when Repeater
     // rebuilds on new notifications) so the bar doesn't reset.
-    property real createdAt: 0
+    // MUST be initialized via property initializer (runs at construction)
+    // not Component.onCompleted — otherwise delegate reads 0 in the same
+    // event-loop pass before onCompleted fires.
+    property real createdAt: Date.now()
 
     readonly property Connections _conn: Connections {
         target: root.notification
@@ -42,7 +45,6 @@ QtObject {
     }
 
     Component.onCompleted: {
-        createdAt = Date.now()
         if (!notification) return
         summary = notification.summary || ""
         body = notification.body || ""

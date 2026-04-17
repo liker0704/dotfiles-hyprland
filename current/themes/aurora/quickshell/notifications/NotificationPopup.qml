@@ -133,26 +133,32 @@ Scope {
                                     }
                                 }
 
-                                // Progress bar — uses real wall-clock time so
-                                // each notification's bar is independent. When
-                                // the Repeater delegate is recreated (new notif),
-                                // the bar starts mid-animation based on elapsed.
+                                // Progress bar — animate a "fraction" property
+                                // (1.0 → 0.0) instead of width, so the fill
+                                // tracks parent resize and survives delegate
+                                // recreation based on wall-clock elapsed time.
                                 Rectangle {
                                     Layout.fillWidth: true; height: 2; radius: 1; color: root.theme.bgHighlight
                                     visible: cardRoot.modelData.urgency !== NotificationUrgency.Critical
                                     Rectangle {
                                         id: progressFill
                                         property real totalMs: cardRoot.modelData.expireTimeout * 1000
-                                        property real remainingMs: Math.max(0, totalMs - (Date.now() - cardRoot.modelData.createdAt))
-                                        height: parent.height; radius: 1; color: root.theme.accent; opacity: 0.4
-                                        width: parent.width * (remainingMs / totalMs)
-                                        Component.onCompleted: widthAnim.start()
-                                        NumberAnimation on width {
-                                            id: widthAnim
+                                        property real elapsedAtBirth: Date.now() - cardRoot.modelData.createdAt
+                                        property real remainingMs: Math.max(1, totalMs - elapsedAtBirth)
+                                        property real fraction: Math.max(0, 1 - elapsedAtBirth / totalMs)
+                                        anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
+                                        width: parent.width * fraction
+                                        radius: 1; color: root.theme.accent; opacity: 0.4
+                                        // Standalone animation (not "on fraction"): targets the property
+                                        // explicitly, overrides the binding when .start() is called.
+                                        NumberAnimation {
+                                            id: shrinkAnim
+                                            target: progressFill
+                                            property: "fraction"
                                             to: 0
                                             duration: progressFill.remainingMs
-                                            running: false
                                         }
+                                        Component.onCompleted: shrinkAnim.start()
                                     }
                                 }
                             }
