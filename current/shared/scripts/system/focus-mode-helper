@@ -1,0 +1,62 @@
+#!/bin/bash
+# Privileged helper for FocusMode.sh — runs as root via passwordless sudo.
+# Restricted to 4 subcommands that modify specific paths only.
+#
+# Install: sudo install -m 0755 /tmp/focus-mode-helper /usr/local/bin/
+# Sudoers: /etc/sudoers.d/focus-mode (provided separately, NOPASSWD only for
+# this exact binary path).
+
+set -euo pipefail
+
+HOSTS_FILE="/etc/hosts"
+HOSTS_MARKER="# FOCUS-MODE-BLOCK"
+CHROME_POLICY_DIR="/etc/opt/chrome/policies/managed"
+CHROME_POLICY_FILE="$CHROME_POLICY_DIR/focus.json"
+
+cmd="${1:-}"
+
+case "$cmd" in
+  block-hosts)
+    # Read hosts entries from stdin; each line must end with $HOSTS_MARKER.
+    # Reject lines without the marker to prevent arbitrary /etc/hosts writes.
+    tmp=$(mktemp)
+    trap 'rm -f "$tmp"' EXIT
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      if [[ "$line" != *"$HOSTS_MARKER"* ]]; then
+        echo "focus-mode-helper: rejecting line without marker: $line" >&2
+        exit 2
+      fi
+      printf '%s\n' "$line" >> "$tmp"
+    done
+    cat "$tmp" >> "$HOSTS_FILE"
+    ;;
+
+  unblock-hosts)
+    # Remove all lines containing the focus-mode marker.
+    sed -i "\|$HOSTS_MARKER|d" "$HOSTS_FILE"
+    ;;
+
+  set-chrome-policy)
+    # Read JSON from stdin; validate with jq before writing.
+    mkdir -p "$CHROME_POLICY_DIR"
+    tmp=$(mktemp)
+    trap 'rm -f "$tmp"' EXIT
+    cat > "$tmp"
+    if ! jq empty < "$tmp" 2>/dev/null; then
+      echo "focus-mode-helper: chrome policy input is not valid JSON" >&2
+      exit 3
+    fi
+    install -m 0644 "$tmp" "$CHROME_POLICY_FILE"
+    ;;
+
+  remove-chrome-policy)
+    rm -f "$CHROME_POLICY_FILE"
+    ;;
+
+  *)
+    echo "focus-mode-helper: unknown subcommand: $cmd" >&2
+    echo "usage: focus-mode-helper {block-hosts|unblock-hosts|set-chrome-policy|remove-chrome-policy}" >&2
+    exit 1
+    ;;
+esac

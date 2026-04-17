@@ -1,0 +1,4 @@
+# Passwordless sudo for FocusMode.sh helper.
+# Allows the `liker` user to invoke /usr/local/bin/focus-mode-helper
+# with any subcommand, without password prompt, and nothing else.
+liker ALL=(root) NOPASSWD: /usr/local/bin/focus-mode-helper *
