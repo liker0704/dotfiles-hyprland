@@ -62,7 +62,10 @@ Scope {
             visible: root.showOsd; focusable: false; color: "transparent"
             WlrLayershell.layer: WlrLayer.Overlay; WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
             exclusionMode: ExclusionMode.Ignore
-            anchors { bottom: true; left: true; right: true }
+            // Anchor only to bottom — compositor sizes layer to implicitWidth
+            // (260) and centers it. With left+right anchored the layer
+            // stretched full screen-width for no reason (260px content).
+            anchors { bottom: true }
             margins.bottom: 80; implicitWidth: 260; implicitHeight: 70
 
 

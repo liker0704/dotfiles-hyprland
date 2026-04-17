@@ -146,14 +146,11 @@ Scope {
                                     function onVisibleChanged() { if (root.visible) searchInput.text = "" }
                                 }
                                 Keys.onReturnPressed: {
-                                    // Run as terminal command if starts with > or !
+                                    // Run as shell command ONLY when prefixed with > or !
+                                    // (removed implicit "no-match → bash -c text" fallback —
+                                    // too easy to accidentally run deletion/reboot commands).
                                     if (text.startsWith(">") || text.startsWith("!")) {
                                         root.runCommand(text.substring(1).trim())
-                                        return
-                                    }
-                                    // If no apps match, try as command
-                                    if (root.filteredApps.length === 0 && text.trim() !== "") {
-                                        root.runCommand(text.trim())
                                         return
                                     }
                                     var idx = appList.currentIndex >= 0 ? appList.currentIndex : 0

@@ -19,6 +19,19 @@ Item {
     readonly property var monthNames: ["January","February","March","April","May","June","July","August","September","October","November","December"]
     readonly property var dayLabels: ["Mo","Tu","We","Th","Fr","Sa","Su"]
 
+    // Refresh today markers when popup becomes visible — prevents stale
+    // "today" if popup was last opened on a different day.
+    onVisibleChanged: {
+        if (visible) {
+            var now = new Date()
+            todayDay = now.getDate()
+            todayMonth = now.getMonth()
+            todayYear = now.getFullYear()
+            displayMonth = todayMonth
+            displayYear = todayYear
+        }
+    }
+
     function daysInMonth(m, y) { return new Date(y, m + 1, 0).getDate() }
     function firstDayOfWeek(m, y) { var d = new Date(y, m, 1).getDay(); return d === 0 ? 6 : d - 1 }
 

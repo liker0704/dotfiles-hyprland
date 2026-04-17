@@ -16,20 +16,20 @@ Item {
     property bool charging: false
     property string currentProfile: "balanced"
 
-    // Read power profile
+    // Read power profile — only polls when popup is visible (was: always-on
+    // 3s Timer spawning powerprofilesctl even when the popup was never opened).
     Process {
-        id: profileProc; running: true
+        id: profileProc
         command: ["powerprofilesctl", "get"]
         stdout: SplitParser { onRead: data => { bat.currentProfile = data.trim() } }
     }
-    Timer { interval: 3000; running: true; repeat: true; onTriggered: { profileProc.running = false; profileProc.running = true } }
+    Timer { interval: 3000; running: bat.visible; repeat: true; onTriggered: { profileProc.running = false; profileProc.running = true } }
+    onVisibleChanged: if (visible) { profileProc.running = false; profileProc.running = true }
 
     Process {
         id: setProfileProc
-        property string target: ""
-        command: ["powerprofilesctl", "set", target]
         onRunningChanged: {
-            if (!running && target !== "") {
+            if (!running) {
                 profileProc.running = false
                 profileProc.running = true
             }
@@ -37,7 +37,7 @@ Item {
     }
 
     function setProfile(name) {
-        setProfileProc.target = name
+        setProfileProc.command = ["powerprofilesctl", "set", name]
         setProfileProc.running = true
         currentProfile = name
     }
