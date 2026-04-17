@@ -23,7 +23,10 @@ Scope {
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
             exclusionMode: ExclusionMode.Ignore
-            anchors { top: true; left: true; right: true }
+            // Anchor top only: compositor sizes layer to implicitWidth (420)
+            // and centers it. With left+right anchored the layer spanned the
+            // full screen width and swallowed clicks on the whole top strip.
+            anchors { top: true }
             implicitWidth: 420
             implicitHeight: notifCol.implicitHeight + 60
 
