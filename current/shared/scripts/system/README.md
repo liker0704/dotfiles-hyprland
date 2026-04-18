@@ -57,3 +57,21 @@ Verify after restart:
 docker info | grep -E 'Storage Driver|snapshotter'
 # → Storage Driver: overlay2   (NOT io.containerd.snapshotter.v1)
 ```
+
+## krb5-minimal.conf
+
+Install:
+```bash
+sudo cp /etc/krb5.conf /etc/krb5.conf.bak
+sudo install -m 0644 krb5-minimal.conf /etc/krb5.conf
+```
+
+Replaces Arch's default `/etc/krb5.conf` (shipped with MIT example
+`default_realm = ATHENA.MIT.EDU`). FreeRDP 3.x's NLA/SPNEGO queries that
+non-existent KDC before trying NTLM — connections to non-AD Windows
+hosts fail with `Client <user>@ATHENA.MIT.EDU not found in Kerberos
+database → SPNEGO failed → ERRCONNECT_AUTHENTICATION_FAILED`.
+
+Empty libdefaults (no default_realm, no realms block) makes Kerberos
+fail-fast, SPNEGO falls through to NTLM in milliseconds.
+See FreeRDP#10138 + arch krb5 package bug.

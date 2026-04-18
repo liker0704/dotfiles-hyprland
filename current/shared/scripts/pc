@@ -154,16 +154,19 @@ case "$cmd" in
         exec ssh "$PC2" "$@"
         ;;
     vnc|rdp)
-        # /sec:nla — force Network-Level Auth (skips Kerberos which fails
-        # without an AD domain, producing ERRCONNECT and black screen).
-        # Password from PC_PASS env (set in ~/.config/pc/config) or prompts.
+        # Disable Kerberos inside CredSSP so NLA uses NTLM directly.
+        # Arch ships /etc/krb5.conf with default_realm=ATHENA.MIT.EDU (MIT
+        # example) — SPNEGO queries that non-existent KDC and blows up before
+        # falling to NTLM. /auth-pkg-list:!kerberos keeps NLA on but bypasses
+        # Kerberos. See FreeRDP#10138 / Arch krb5 bug.
         pw="${PC_PASS:-}"
         if [[ -z "$pw" ]]; then
             read -rsp "Password for ${PC_USER}@${PC_HOST}: " pw
             echo
         fi
         exec xfreerdp3 /v:"${PC_HOST}" /u:"${PC_USER}" /p:"$pw" \
-            /sec:nla /cert:ignore /dynamic-resolution /f /sound +clipboard
+            /sec:nla /auth-pkg-list:'!kerberos' \
+            /cert:ignore /dynamic-resolution /f /sound +clipboard
         ;;
     tmux)
         exec ssh -t "$PC2" tmux attach "$@"
