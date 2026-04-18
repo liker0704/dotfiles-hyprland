@@ -157,7 +157,7 @@ case "$cmd" in
         # /sec:nla — force Network-Level Auth (skips Kerberos which fails
         # without an AD domain, producing ERRCONNECT and black screen).
         # Password from PC_PASS env (set in ~/.config/pc/config) or prompts.
-        local pw="${PC_PASS:-}"
+        pw="${PC_PASS:-}"
         if [[ -z "$pw" ]]; then
             read -rsp "Password for ${PC_USER}@${PC_HOST}: " pw
             echo
