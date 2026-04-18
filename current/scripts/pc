@@ -154,19 +154,17 @@ case "$cmd" in
         exec ssh "$PC2" "$@"
         ;;
     vnc|rdp)
-        # Disable Kerberos inside CredSSP so NLA uses NTLM directly.
-        # Arch ships /etc/krb5.conf with default_realm=ATHENA.MIT.EDU (MIT
-        # example) — SPNEGO queries that non-existent KDC and blows up before
-        # falling to NTLM. /auth-pkg-list:!kerberos keeps NLA on but bypasses
-        # Kerberos. See FreeRDP#10138 / Arch krb5 bug.
+        # Use FreeRDP v2 (/usr/bin/xfreerdp) instead of v3 (xfreerdp3).
+        # v3.24 (Arch) has NTLM MIC interop bug with libfreerdp-server3 3.15
+        # shipped by Debian's gnome-remote-desktop 48.1. v2.11 uses the older
+        # NTLM path and authenticates cleanly. Install via: paru -S freerdp2
         pw="${PC_PASS:-}"
         if [[ -z "$pw" ]]; then
             read -rsp "Password for ${PC_USER}@${PC_HOST}: " pw
             echo
         fi
-        exec xfreerdp3 /v:"${PC_HOST}" /u:"${PC_USER}" /p:"$pw" \
-            /sec:nla /auth-pkg-list:'!kerberos' \
-            /cert:ignore /dynamic-resolution /f /sound +clipboard
+        exec xfreerdp /v:"${PC_HOST}" /u:"${PC_USER}" /p:"$pw" \
+            /sec:nla /cert:ignore /dynamic-resolution /f /sound +clipboard
         ;;
     tmux)
         exec ssh -t "$PC2" tmux attach "$@"
