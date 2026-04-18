@@ -1,0 +1,15 @@
+#!/bin/bash
+# Wait until Quickshell registers org.kde.StatusNotifierWatcher, then launch
+# voxtype-tray. Without this, voxtype-tray races qs at startup, sees no
+# system tray, and falls back to opening the settings GUI window.
+# Caps wait at 30 sec to avoid hanging if qs never starts.
+
+for i in $(seq 1 60); do
+    if busctl --user list 2>/dev/null | grep -q "org.kde.StatusNotifierWatcher"; then
+        exec /usr/bin/voxtype-tray
+    fi
+    sleep 0.5
+done
+
+# Fallback: launch anyway (will show window, but tray was unavailable for 30s)
+exec /usr/bin/voxtype-tray
