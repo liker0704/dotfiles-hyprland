@@ -154,7 +154,16 @@ case "$cmd" in
         exec ssh "$PC2" "$@"
         ;;
     vnc|rdp)
-        exec xfreerdp3 /v:"${PC_HOST}" /u:"${PC_USER}" /p:"${PC_USER}" /dynamic-resolution /f /sound +clipboard /cert:ignore
+        # /sec:nla — force Network-Level Auth (skips Kerberos which fails
+        # without an AD domain, producing ERRCONNECT and black screen).
+        # Password from PC_PASS env (set in ~/.config/pc/config) or prompts.
+        local pw="${PC_PASS:-}"
+        if [[ -z "$pw" ]]; then
+            read -rsp "Password for ${PC_USER}@${PC_HOST}: " pw
+            echo
+        fi
+        exec xfreerdp3 /v:"${PC_HOST}" /u:"${PC_USER}" /p:"$pw" \
+            /sec:nla /cert:ignore /dynamic-resolution /f /sound +clipboard
         ;;
     tmux)
         exec ssh -t "$PC2" tmux attach "$@"
