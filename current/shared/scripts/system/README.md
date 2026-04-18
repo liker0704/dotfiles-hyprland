@@ -1,17 +1,20 @@
 # System-privileged scripts
 
-These files need to be installed to root-owned locations:
+## focus-mode-helper
 
 ```bash
 sudo install -m 0755 focus-mode-helper /usr/local/bin/
-sudo install -m 0440 focus-mode.sudoers /etc/sudoers.d/focus-mode
-sudo visudo -c  # verify
 ```
 
-`focus-mode-helper` is invoked by `~/.config/hypr/UserScripts/FocusMode.sh`
-via passwordless sudo to modify `/etc/hosts` and Chrome managed policies.
-The sudoers drop-in allows only the exact binary path — nothing else gets
-passwordless privilege escalation.
+Invoked by `~/.config/hypr/UserScripts/FocusMode.sh` via `sudo` to modify
+`/etc/hosts` and Chrome managed policies. The helper validates input —
+rejects /etc/hosts lines without the FOCUS-MODE-BLOCK marker and rejects
+Chrome policy that isn't valid JSON.
+
+**No NOPASSWD sudoers drop-in is shipped** — every FocusMode toggle
+prompts for password. The previous `focus-mode.sudoers` drop-in was
+removed for security: any process running as your user could trigger
+arbitrary /etc/hosts writes through the helper without authentication.
 
 ## tmux-user.tmpfiles
 
