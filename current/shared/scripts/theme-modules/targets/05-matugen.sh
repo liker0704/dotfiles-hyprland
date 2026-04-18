@@ -106,8 +106,8 @@ def L(h):
 # pastel-light). primary is pure MD3 for readable text/icons; container is
 # closer to the wallpaper's actual dominant color while still contrasting
 # against surface. On dark theme: primary=#9XcXfX vs primary_container=#3X7X9X.
-primary = s('primary_container') or s('primary')
-secondary = s('secondary_container') or s('secondary')
+primary = s('primary')
+secondary = s('secondary')
 bg_v = s('surface'); fg_v = s('on_surface')
 
 # Fix 1: if accent vs surface contrast is too low, boost lightness toward

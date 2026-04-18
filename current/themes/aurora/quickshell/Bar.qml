@@ -89,7 +89,7 @@ PanelWindow {
         id: calendarPopup; barWindow: bar; anchorItem: clockPill
         popupWidth: 280; popupHeight: 290
         bgColor: Md3.md3.surface_container_high; borderColor: Md3.md3.outline_variant
-        CalendarPopup { anchors.fill: parent; accent: Md3.md3.primary_container; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Md3.md3.surface_container_highest }
+        CalendarPopup { anchors.fill: parent; accent: Md3.md3.primary; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Md3.md3.surface_container_highest }
     }
 
     // ==================== LEFT SECTION ====================
@@ -115,13 +115,13 @@ PanelWindow {
                         required property var modelData
                         property bool isActive: modelData.id === bar.monitor?.activeWorkspace?.id
                         Layout.preferredWidth: 30; Layout.preferredHeight: 30; radius: 9
-                        color: isActive ? Md3.md3.primary_container : "transparent"
+                        color: isActive ? Md3.md3.primary : "transparent"
                         Behavior on color { ColorAnimation { duration: 150 } }
                         Text {
                             anchors.centerIn: parent; text: modelData.id.toString()
                             font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold
                             font.letterSpacing: 0.6
-                            color: parent.isActive ? Md3.md3.on_primary_container : Colors.fgMuted
+                            color: parent.isActive ? Md3.md3.on_primary : Colors.fgMuted
                             renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting
                         }
                         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Hyprland.dispatch("workspace " + modelData.id) }
@@ -191,7 +191,7 @@ PanelWindow {
                     implicitHeight: volumeRow.implicitHeight
                     RowLayout {
                         id: volumeRow; anchors.fill: parent; spacing: 4
-                        Text { text: bar.volumeMuted ? "󰝟" : "󰕾"; font.family: Appearance.font.mono; font.pixelSize: 16; color: bar.volumeMuted ? Colors.fgMuted : Md3.md3.primary_container; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
+                        Text { text: bar.volumeMuted ? "󰝟" : "󰕾"; font.family: Appearance.font.mono; font.pixelSize: 16; color: bar.volumeMuted ? Colors.fgMuted : Md3.md3.primary; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
                         Text { text: bar.volumePercent + "%"; font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold; color: Colors.fgDim; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
                     }
                     MouseArea {
@@ -210,7 +210,7 @@ PanelWindow {
                     implicitHeight: networkRow.implicitHeight
                     RowLayout {
                         id: networkRow; anchors.fill: parent; spacing: 4
-                        Text { text: bar.networkType === "wifi" ? "󰤢" : (bar.networkConnected ? "󰈀" : "󰤠"); font.family: Appearance.font.mono; font.pixelSize: 17; color: bar.networkConnected ? Md3.md3.primary_container : Colors.fgMuted; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
+                        Text { text: bar.networkType === "wifi" ? "󰤢" : (bar.networkConnected ? "󰈀" : "󰤠"); font.family: Appearance.font.mono; font.pixelSize: 17; color: bar.networkConnected ? Md3.md3.primary : Colors.fgMuted; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
                         Text { visible: bar.networkType === "wifi" && bar.networkName.length > 0; text: bar.networkName; font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold; color: Colors.fgDim; elide: Text.ElideRight; Layout.maximumWidth: 100; Layout.alignment: Qt.AlignVCenter; renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting }
                     }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Quickshell.exec(["nm-connection-editor"]) }
@@ -235,7 +235,7 @@ PanelWindow {
                                 var cx = width/2, cy = height/2, r = 8
                                 ctx.lineWidth = 2.5; ctx.lineCap = "round"
                                 ctx.strokeStyle = Qt.rgba(1,1,1,0.08); ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI); ctx.stroke()
-                                ctx.strokeStyle = bar.batteryCharging ? Md3.md3.primary_container : (bar.batteryPercent > 20 ? Md3.md3.primary_container : Md3.md3.error)
+                                ctx.strokeStyle = bar.batteryCharging ? Md3.md3.primary : (bar.batteryPercent > 20 ? Md3.md3.primary : Md3.md3.error)
                                 ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + pct*2*Math.PI); ctx.stroke()
                             }
                         }
@@ -262,7 +262,7 @@ PanelWindow {
         id: volumePopup; barWindow: bar; anchorItem: volumeArea
         popupWidth: 220; popupHeight: 160
         bgColor: Md3.md3.surface_container_high; borderColor: Md3.md3.outline_variant
-        VolumePopup { anchors.fill: parent; accent: Md3.md3.primary_container; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Md3.md3.surface_container_highest }
+        VolumePopup { anchors.fill: parent; accent: Md3.md3.primary; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Md3.md3.surface_container_highest }
     }
 
     // Battery popup — power profiles
@@ -270,6 +270,6 @@ PanelWindow {
         id: batteryPopup; barWindow: bar; anchorItem: batteryArea
         popupWidth: 230; popupHeight: 260
         bgColor: Md3.md3.surface_container_high; borderColor: Md3.md3.outline_variant
-        BatteryPopup { anchors.fill: parent; accent: Md3.md3.primary_container; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Md3.md3.surface_container_highest; percent: bar.batteryPercent; charging: bar.batteryCharging }
+        BatteryPopup { anchors.fill: parent; accent: Md3.md3.primary; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Md3.md3.surface_container_highest; percent: bar.batteryPercent; charging: bar.batteryCharging }
     }
 }
