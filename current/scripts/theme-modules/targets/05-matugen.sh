@@ -102,7 +102,12 @@ def L(h):
     r,g,b = [int(h[i:i+2],16)/255 for i in (0,2,4)]
     return colorsys.rgb_to_hls(r,g,b)[1]
 
-primary, secondary = s('primary'), s('secondary')
+# Use primary_container (tone 30, more saturated) instead of primary (tone 80,
+# pastel-light). primary is pure MD3 for readable text/icons; container is
+# closer to the wallpaper's actual dominant color while still contrasting
+# against surface. On dark theme: primary=#9XcXfX vs primary_container=#3X7X9X.
+primary = s('primary_container') or s('primary')
+secondary = s('secondary_container') or s('secondary')
 bg_v = s('surface'); fg_v = s('on_surface')
 
 # Fix 1: if accent vs surface contrast is too low, boost lightness toward
