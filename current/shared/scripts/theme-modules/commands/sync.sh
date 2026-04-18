@@ -1,14 +1,30 @@
 # Sync palette to all configs
 
 apply_palette() {
-  # Prevent concurrent sync runs (e.g. Super+W spam) from racing on
-  # palette.conf — half-written file makes QS fall back to magenta.
+  # Prevent concurrent sync runs (Super+W spam) from racing on palette.conf —
+  # half-written file makes QS fall back to magenta. PID-based staleness
+  # check handles phantom locks left by crashed processes (kernel sometimes
+  # doesn't release flock on abnormal exit).
   mkdir -p "$HOME/.config/theme"
-  exec 9>"$HOME/.config/theme/.sync.lock"
-  if ! flock -n 9; then
-    echo "  sync already running, skipping"
+  local lock_file="$HOME/.config/theme/.sync.lock"
+
+  for attempt in 1 2; do
+    exec 9>"$lock_file"
+    if flock -n 9; then
+      echo $$ >&9
+      break
+    fi
+    # flock failed — is the holder actually alive?
+    local holder
+    holder=$(cat "$lock_file" 2>/dev/null)
+    if [[ -z "$holder" ]] || ! kill -0 "$holder" 2>/dev/null; then
+      # Phantom lock (dead PID). Remove file to force new inode on retry.
+      rm -f "$lock_file"
+      continue
+    fi
+    echo "  sync already running (pid $holder), skipping"
     return 0
-  fi
+  done
 
   # Read palette and compute derived variables
   source "$THEME_LIB/palette.sh"
