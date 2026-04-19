@@ -4,6 +4,7 @@ import Quickshell.Io
 import Quickshell.Services.SystemTray
 import Quickshell.Services.Pipewire
 import Quickshell.Services.Mpris
+import Quickshell.Widgets
 import QtQuick
 import QtQuick.Layouts
 
@@ -147,13 +148,10 @@ PanelWindow {
                 Layout.preferredWidth: visible ? 22 : 0; Layout.preferredHeight: 22
                 Layout.alignment: Qt.AlignVCenter
 
-                Image {
+                IconImage {
                     anchors.centerIn: parent
                     width: 20; height: 20
                     source: modelData.icon
-                    fillMode: Image.PreserveAspectFit
-                    smooth: true; mipmap: true
-                    sourceSize.width: 128; sourceSize.height: 128
                 }
 
                 MouseArea {
