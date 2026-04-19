@@ -32,4 +32,14 @@ cat > "$HOME/.config/gtk-4.0/gtk.css" << EOF
 @define-color error_fg_color #${C[bg]};
 EOF
 
+# Live-toggle libadwaita color-scheme so AdwStyleManager flips running apps
+# (Nautilus, Loupe, etc.) between their light/dark CSS branches without
+# restart. Hex changes from gtk.css above still need an app restart —
+# libadwaita has no live CSS reload.
+if $is_light; then
+  gsettings set org.gnome.desktop.interface color-scheme 'prefer-light' 2>/dev/null
+else
+  gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null
+fi
+
 echo -e "    ${GREEN}gtk4/libadwaita${RESET}"
