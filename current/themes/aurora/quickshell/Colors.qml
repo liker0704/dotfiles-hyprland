@@ -11,7 +11,9 @@ QtObject {
 
     property FileView _paletteFile: FileView {
         path: root._palettePath
-        onLoadedChanged: if (loaded) root.reload()
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: root.reload()
     }
 
     property Process _watcher: Process {
