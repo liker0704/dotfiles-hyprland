@@ -1,5 +1,19 @@
 # --- tmux auto-start (MUST BE FIRST) ---
 if [[ -z "$TMUX" && -z "$NOTERM" && -t 1 ]]; then
+    # Heal stale server contaminated by the assistant container:
+    # container's `bun` user has SHELL="" and /etc/passwd shell=/bin/sh, so any
+    # `tmux new-session` from the container before the host server exists creates
+    # a server with default-shell=/bin/sh. Force-reset the option, then respawn
+    # any pane stuck in sh (preserves session history vs. kill-session).
+    if tmux has-session 2>/dev/null; then
+        tmux set-option -g default-shell /usr/bin/zsh 2>/dev/null
+        tmux set-option -g default-command /usr/bin/zsh 2>/dev/null
+        tmux list-panes -aF '#{pane_id} #{pane_current_command}' 2>/dev/null \
+            | awk '$2 == "sh" { print $1 }' \
+            | while read -r pane; do
+                tmux respawn-pane -k -t "$pane" /usr/bin/zsh 2>/dev/null
+              done
+    fi
     exec tmux new-session -A -s main
 fi
 
@@ -116,6 +130,12 @@ export PATH="$PATH:$HOME/scripts"
 
 
 alias cod='codex --dangerously-bypass-approvals-and-sandbox'
+
+# Dedupe PATH (zshrc may be sourced twice via tmux/exec chains)
+typeset -U path PATH
+
+# Default browser for CLI tools (NordVPN login, gh, etc.)
+export BROWSER=/usr/bin/zen-browser
 
 # Machine-specific overrides (not in git)
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
