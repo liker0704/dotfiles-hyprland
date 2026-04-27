@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+capture_file="${OBSIDIAN_QUICK_CAPTURE_FILE:-$HOME/Notes/MainVault/00_Inbox/Quick Capture.md}"
+
+if [[ $# -eq 0 ]]; then
+  printf 'Usage: note "your text"\n' >&2
+  exit 1
+fi
+
+timestamp="$(date '+%Y-%m-%d %H:%M')"
+printf -- '- %s %s\n' "$timestamp" "$*" >> "$capture_file"

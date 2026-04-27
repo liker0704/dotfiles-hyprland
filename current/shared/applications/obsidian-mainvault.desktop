@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Obsidian (MainVault)
+Comment=Open Obsidian with MainVault
+Exec=obsidian-notes
+Icon=md.obsidian.Obsidian
+Terminal=false
+Categories=Office;
+StartupWMClass=obsidian
+X-Flatpak=md.obsidian.Obsidian

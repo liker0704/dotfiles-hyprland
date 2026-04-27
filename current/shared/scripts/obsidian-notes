@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+vault_path="${OBSIDIAN_MAIN_VAULT:-$HOME/Notes/MainVault}"
+
+if [[ -x "/usr/bin/obsidian" ]]; then
+  exec /usr/bin/obsidian "$vault_path"
+fi
+
+if ! command -v flatpak >/dev/null 2>&1; then
+  printf 'Obsidian is not installed (native or Flatpak).\n' >&2
+  exit 1
+fi
+
+exec flatpak run --branch=stable --arch=x86_64 --command=obsidian.sh --file-forwarding md.obsidian.Obsidian @@ "$vault_path" @@

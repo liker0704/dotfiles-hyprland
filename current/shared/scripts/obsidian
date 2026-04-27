@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -eq 0 ]]; then
+  exec obsidian-notes
+fi
+
+if [[ -x "/usr/bin/obsidian" ]]; then
+  exec /usr/bin/obsidian "$@"
+fi
+
+if command -v flatpak >/dev/null 2>&1; then
+  exec flatpak run md.obsidian.Obsidian "$@"
+fi
+
+printf 'Obsidian is not installed (native or Flatpak).\n' >&2
+exit 1

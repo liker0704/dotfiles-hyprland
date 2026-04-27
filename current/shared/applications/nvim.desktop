@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Neovim wrapper
+GenericName=Text Editor
+Comment=Edit text files in Kitty + Neovim
+TryExec=kitty
+Exec=kitty -e nvim %F
+Terminal=false
+Type=Application
+Icon=nvim
+Categories=Utility;TextEditor;
+StartupNotify=false
+MimeType=text/plain;text/markdown;text/x-markdown;application/json;text/x-python;text/yaml;text/css;text/javascript;

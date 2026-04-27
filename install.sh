@@ -118,6 +118,12 @@ FILE_MAPS=(
   "scripts/mpvpaper-stop:$REAL_HOME/.local/bin/mpvpaper-stop"
   "scripts/pc:$REAL_HOME/.local/bin/pc"
   "scripts/kitty-raw:$REAL_HOME/.local/bin/kitty-raw"
+  "scripts/obsidian:$REAL_HOME/.local/bin/obsidian"
+  "scripts/obsidian-notes:$REAL_HOME/.local/bin/obsidian-notes"
+  "scripts/note:$REAL_HOME/.local/bin/note"
+  "applications/obsidian-mainvault.desktop:$REAL_HOME/.local/share/applications/obsidian-mainvault.desktop"
+  "applications/nvim.desktop:$REAL_HOME/.local/share/applications/nvim.desktop"
+  "mimeapps.list:$REAL_HOME/.config/mimeapps.list"
   ".zshrc:$REAL_HOME/.zshrc"
   ".p10k.zsh:$REAL_HOME/.p10k.zsh"
 )
@@ -292,7 +298,10 @@ done
 chmod +x "$REAL_HOME/.local/bin/theme" \
          "$REAL_HOME/.local/bin/mpvpaper-stop" \
          "$REAL_HOME/.local/bin/pc" \
-         "$REAL_HOME/.local/bin/kitty-raw" 2>/dev/null || true
+         "$REAL_HOME/.local/bin/kitty-raw" \
+         "$REAL_HOME/.local/bin/obsidian" \
+         "$REAL_HOME/.local/bin/obsidian-notes" \
+         "$REAL_HOME/.local/bin/note" 2>/dev/null || true
 
 for _script_dir in \
   "$REAL_HOME/.local/bin" \
@@ -313,6 +322,7 @@ done
 chown -R "$REAL_USER:$REAL_USER" \
   "$REAL_HOME/.config" \
   "$REAL_HOME/.local/bin" \
+  "$REAL_HOME/.local/share/applications" \
   "$REAL_HOME/.local/share/theme" \
   "$REAL_HOME/.zshrc" \
   "$REAL_HOME/.p10k.zsh" \
