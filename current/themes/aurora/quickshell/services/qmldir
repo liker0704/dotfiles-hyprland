@@ -1,0 +1,2 @@
+module aurora.services
+singleton TaskService 1.0 TaskService.qml

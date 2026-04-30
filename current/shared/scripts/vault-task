@@ -1,0 +1,436 @@
+#!/usr/bin/env bash
+# vault-task — mutate Obsidian markdown task lines safely.
+# Looks up tasks by SHA1 id from ~/.cache/today-tasks.json (written by
+# today-tasks aggregator) and rewrites the source .md atomically.
+#
+# Subcommands:
+#   add "text" [--time HH:MM] [--end HH:MM] [--due YYYY-MM-DD]
+#              [--priority high|medium|low] [--recur daily|weekly|monthly|yearly]
+#              [--tag a,b]  [--file <path|today>]
+#   toggle <id>          flip [ ] ↔ [x]; auto ✅ on done; spawn next on recurring
+#   delete <id>          remove the task line
+#   edit <id> [flags...] replace task with rebuilt line (preserves un-overridden fields)
+#   list                 dump id + text of active tasks
+set -euo pipefail
+
+VAULT_PATH="${VAULT_PATH:-$HOME/Notes/MainVault}"
+DAILY_FOLDER="${DAILY_FOLDER:-01_Daily}"
+DAILY_DATE_FORMAT="${DAILY_DATE_FORMAT:-+%F}"
+TEMPLATES_FOLDER="${TEMPLATES_FOLDER:-Templates}"
+DAILY_TEMPLATE="${DAILY_TEMPLATE:-Daily.md}"
+JSON_CACHE="${TODAY_TASKS_CACHE:-$HOME/.cache/today-tasks.json}"
+
+CONFIG_FILE="${TODAY_TASKS_CONFIG:-$HOME/.config/today-tasks/config}"
+[[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
+
+usage() {
+  cat <<'USAGE'
+vault-task <command> [args]
+
+  add "text" [--time HH:MM] [--end HH:MM] [--due YYYY-MM-DD]
+             [--priority high|medium|low]
+             [--recur daily|weekly|monthly|yearly]
+             [--tag a,b] [--description "free text"] [--file <path|today>]
+  toggle <id>
+  delete <id>
+  edit <id> [--text "new"] [--time ...] [--end ...] [--due ...]
+            [--priority ...] [--recur ...] [--tag ...] [--description ...]
+  list
+
+<id> is the 16-char hex from today-tasks.json (.today[].id, .other[].id, .completed[].id).
+File argument 'today' (default) resolves to <DAILY_FOLDER>/<YYYY-MM-DD>.md.
+USAGE
+}
+
+# Build a markdown task line from metadata pieces.
+build_line() {
+  local text="$1" time="$2" endt="$3" due="$4" priority="$5" recur="$6" tags="$7" description="${8:-}"
+  local prefix=""
+  if [[ -n "$time" ]]; then
+    if [[ -n "$endt" ]]; then
+      prefix="${time}-${endt} "
+    else
+      prefix="${time} "
+    fi
+  fi
+  local line="- [ ] ${prefix}${text}"
+  case "$priority" in
+    high|highest) line="${line} ⏫" ;;
+    medium|med)   line="${line} 🔼" ;;
+    low|lowest)   line="${line} 🔽" ;;
+  esac
+  [[ -n "$due" ]] && line="${line} 📅 ${due}"
+  case "$recur" in
+    daily|day)     line="${line} 🔁 every day" ;;
+    weekly|week)   line="${line} 🔁 every week" ;;
+    monthly|month) line="${line} 🔁 every month" ;;
+    yearly|year)   line="${line} 🔁 every year" ;;
+  esac
+  if [[ -n "$tags" ]]; then
+    local IFS=','
+    for t in $tags; do
+      [[ -n "$t" ]] && line="${line} #${t}"
+    done
+  fi
+  # Description must be last; parser extracts everything after `description:`
+  # to EOL as the body, so anything appended after would be swallowed.
+  [[ -n "$description" ]] && line="${line} description: ${description}"
+  printf '%s' "$line"
+}
+
+# Look up a task by id; emit "<file>\t<raw>" or empty if not found.
+lookup_id() {
+  local id="$1"
+  [[ -f "$JSON_CACHE" ]] || return 0
+  jq -r --arg id "$id" '
+    [.today[]?, .other[]?, .completed[]?]
+    | map(select(.id == $id))
+    | .[0]
+    | if . then "\(.file)\t\(.raw)" else "" end
+  ' "$JSON_CACHE" 2>/dev/null
+}
+
+# Resolve --file argument to absolute path.
+resolve_file() {
+  local f="$1"
+  if [[ -z "$f" || "$f" == "today" ]]; then
+    echo "$VAULT_PATH/$DAILY_FOLDER/$(date "$DAILY_DATE_FORMAT").md"
+  elif [[ "$f" == /* ]]; then
+    echo "$f"
+  else
+    echo "$VAULT_PATH/$f"
+  fi
+}
+
+# Insert a line into a file inside the "## Tasks" section, or append at end.
+# Creates the file (and section) if missing. When the destination is a daily
+# note that doesn't exist yet, seeds the file from the Daily.md template so
+# obsidian.nvim sees a properly structured note (title, Focus/Notes/Links
+# sections) rather than a bare "## Tasks" stub.
+insert_line() {
+  local file="$1" line="$2"
+  local template_path="$VAULT_PATH/$TEMPLATES_FOLDER/$DAILY_TEMPLATE"
+  local daily_dir="$VAULT_PATH/$DAILY_FOLDER"
+  python3 - "$file" "$line" "$template_path" "$daily_dir" <<'PY'
+import sys, os, tempfile, datetime as dt, re
+
+file_path, line, template_path, daily_dir = sys.argv[1:5]
+os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+# If the destination is a daily-note path that doesn't exist yet and a
+# template is available, seed from the template before inserting the task.
+def _seed_from_template(dest, tpl):
+    if not os.path.exists(tpl):
+        return False
+    stem = os.path.splitext(os.path.basename(dest))[0]
+    # Daily-note filenames are ISO dates; fall back to today's date if not.
+    note_date = stem if re.fullmatch(r'\d{4}-\d{2}-\d{2}', stem) else dt.date.today().isoformat()
+    with open(tpl, 'r', encoding='utf-8') as f:
+        body = f.read()
+    # Common Obsidian template placeholders used by obsidian.nvim too.
+    body = re.sub(r'\{\{\s*date(?::[^}]+)?\s*\}\}', note_date, body)
+    body = re.sub(r'\{\{\s*title\s*\}\}', stem, body)
+    with open(dest, 'w', encoding='utf-8') as f:
+        f.write(body)
+    return True
+
+is_daily_dest = os.path.dirname(os.path.abspath(file_path)) == os.path.abspath(daily_dir)
+if not os.path.exists(file_path) and is_daily_dest:
+    _seed_from_template(file_path, template_path)
+
+content = ""
+if os.path.exists(file_path):
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+existing = content.splitlines()
+
+# Locate the "## Tasks" line; if found, insert before the next H2/H1 (or EOF).
+out = []
+inserted = False
+in_tasks = False
+for i, ln in enumerate(existing):
+    if not in_tasks and ln.strip() == "## Tasks":
+        out.append(ln)
+        in_tasks = True
+        continue
+    if in_tasks and ln.lstrip().startswith(("## ", "# ")) and ln.strip() != "## Tasks":
+        out.append(line)
+        out.append(ln)
+        inserted = True
+        in_tasks = False
+        continue
+    out.append(ln)
+
+if in_tasks and not inserted:
+    out.append(line)
+    inserted = True
+
+if not inserted:
+    if existing and existing[-1].strip() != "":
+        out.append("")
+    out.append("## Tasks")
+    out.append(line)
+
+# Atomic write
+dirn = os.path.dirname(file_path) or "."
+tmp = tempfile.NamedTemporaryFile(mode='w', encoding='utf-8',
+                                  dir=dirn, delete=False)
+try:
+    tmp.write('\n'.join(out))
+    tmp.write('\n')
+    tmp.flush(); os.fsync(tmp.fileno())
+    tmp.close()
+    os.replace(tmp.name, file_path)
+except Exception:
+    try: os.unlink(tmp.name)
+    except OSError: pass
+    raise
+PY
+}
+
+# Replace one specific raw line with new content (or empty string to delete).
+mutate_line() {
+  local file="$1" raw_old="$2" new_line="$3"
+  python3 - "$file" "$raw_old" "$new_line" <<'PY'
+import sys, os, tempfile
+file_path, raw_old, new_line = sys.argv[1], sys.argv[2], sys.argv[3]
+
+with open(file_path, 'r', encoding='utf-8') as f:
+    lines = f.read().splitlines(keepends=True)
+
+modified = False
+out = []
+for ln in lines:
+    bare = ln.rstrip('\n').rstrip('\r')
+    if not modified and bare == raw_old:
+        if new_line:
+            out.append(new_line + ('\n' if ln.endswith('\n') else ''))
+        modified = True
+    else:
+        out.append(ln)
+
+if not modified:
+    sys.stderr.write(f"vault-task: line not found in {file_path}: {raw_old!r}\n")
+    sys.exit(1)
+
+dirn = os.path.dirname(file_path) or "."
+tmp = tempfile.NamedTemporaryFile(mode='w', encoding='utf-8',
+                                  dir=dirn, delete=False)
+try:
+    tmp.writelines(out)
+    tmp.flush(); os.fsync(tmp.fileno())
+    tmp.close()
+    os.replace(tmp.name, file_path)
+except Exception:
+    try: os.unlink(tmp.name)
+    except OSError: pass
+    raise
+PY
+}
+
+# Toggle [ ] ↔ [x]. On done, append ✅YYYY-MM-DD; if 🔁 every X present,
+# also spawn a fresh open task with 📅 advanced by the period.
+toggle_line() {
+  local file="$1" raw_old="$2"
+  python3 - "$file" "$raw_old" <<'PY'
+import sys, os, re, tempfile, datetime as dt, calendar
+file_path, raw_old = sys.argv[1], sys.argv[2]
+today = dt.date.today().isoformat()
+
+DONE_RE  = re.compile(r'^(?P<pre>\s*[-*+]\s*\[)[xX](?P<post>\]\s*)(?P<body>.*)$')
+OPEN_RE  = re.compile(r'^(?P<pre>\s*[-*+]\s*\[)[ ](?P<post>\]\s*)(?P<body>.*)$')
+DONESTAMP = re.compile(r'\s*✅\s*\d{4}-\d{1,2}-\d{1,2}\s*$')
+DUE_RE   = re.compile(r'(📅\s*)(\d{4})-(\d{1,2})-(\d{1,2})')
+RECUR_RE = re.compile(r'🔁\s*every\s+(day|week|month|year)s?', re.IGNORECASE)
+
+
+def advance_due(match, period):
+    y, m, d = int(match.group(2)), int(match.group(3)), int(match.group(4))
+    cur = dt.date(y, m, d)
+    if period == 'day':
+        nxt = cur + dt.timedelta(days=1)
+    elif period == 'week':
+        nxt = cur + dt.timedelta(days=7)
+    elif period == 'month':
+        nm = cur.month + 1
+        ny = cur.year + (nm - 1) // 12
+        nm = ((nm - 1) % 12) + 1
+        last = calendar.monthrange(ny, nm)[1]
+        nxt = dt.date(ny, nm, min(cur.day, last))
+    elif period == 'year':
+        try:
+            nxt = dt.date(cur.year + 1, cur.month, cur.day)
+        except ValueError:
+            nxt = dt.date(cur.year + 1, cur.month, 28)
+    else:
+        return match.group(0)
+    return f"{match.group(1)}{nxt.isoformat()}"
+
+
+with open(file_path, 'r', encoding='utf-8') as f:
+    lines = f.read().splitlines(keepends=True)
+
+modified = False
+out = []
+for ln in lines:
+    bare = ln.rstrip('\n').rstrip('\r')
+    eol = '\n' if ln.endswith('\n') else ''
+    if modified or bare != raw_old:
+        out.append(ln)
+        continue
+
+    dm = DONE_RE.match(bare)
+    if dm:
+        body = DONESTAMP.sub('', dm.group('body')).rstrip()
+        new_bare = f"{dm.group('pre')} {dm.group('post')}{body}"
+        out.append(new_bare + eol)
+    else:
+        om = OPEN_RE.match(bare)
+        if not om:
+            out.append(ln)
+            modified = True
+            continue
+        body = om.group('body').rstrip()
+        if not re.search(r'✅\s*\d{4}-\d{1,2}-\d{1,2}', body):
+            body = f"{body} ✅ {today}"
+        new_bare = f"{om.group('pre')}x{om.group('post')}{body}"
+        out.append(new_bare + eol)
+
+        rm = RECUR_RE.search(bare)
+        if rm:
+            period = rm.group(1).lower()
+            spawn = re.sub(r'\s*✅\s*\d{4}-\d{1,2}-\d{1,2}', '', bare)
+            spawn, n = DUE_RE.subn(lambda m: advance_due(m, period), spawn)
+            # Only spawn if we successfully advanced a 📅 (otherwise no
+            # date anchor — leave alone, user picks).
+            if n > 0:
+                out.append(spawn + eol)
+    modified = True
+
+if not modified:
+    sys.stderr.write(f"vault-task: line not found: {raw_old!r}\n")
+    sys.exit(1)
+
+dirn = os.path.dirname(file_path) or "."
+tmp = tempfile.NamedTemporaryFile(mode='w', encoding='utf-8',
+                                  dir=dirn, delete=False)
+try:
+    tmp.writelines(out)
+    tmp.flush(); os.fsync(tmp.fileno())
+    tmp.close()
+    os.replace(tmp.name, file_path)
+except Exception:
+    try: os.unlink(tmp.name)
+    except OSError: pass
+    raise
+PY
+}
+
+
+cmd_add() {
+  local text="" time="" endt="" due="" priority="" recur="" tags="" description="" file=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --time)        time="$2"; shift 2 ;;
+      --end)         endt="$2"; shift 2 ;;
+      --due)         due="$2"; shift 2 ;;
+      --priority)    priority="$2"; shift 2 ;;
+      --recur)       recur="$2"; shift 2 ;;
+      --tag)         tags="$2"; shift 2 ;;
+      --description) description="$2"; shift 2 ;;
+      --file)        file="$2"; shift 2 ;;
+      --) shift; text="$*"; break ;;
+      -*) echo "vault-task add: unknown flag $1" >&2; exit 1 ;;
+      *)
+        if [[ -z "$text" ]]; then text="$1"; else text="$text $1"; fi
+        shift ;;
+    esac
+  done
+  [[ -z "$text" ]] && { echo "vault-task add: text required" >&2; exit 1; }
+
+  local target_file line
+  target_file=$(resolve_file "$file")
+  line=$(build_line "$text" "$time" "$endt" "$due" "$priority" "$recur" "$tags" "$description")
+  insert_line "$target_file" "$line"
+  echo "$target_file: + $line"
+}
+
+cmd_toggle() {
+  local id="${1:-}"
+  [[ -z "$id" ]] && { echo "vault-task toggle: id required" >&2; exit 1; }
+  local lookup file raw
+  lookup=$(lookup_id "$id")
+  [[ -z "$lookup" ]] && { echo "vault-task: id not found: $id" >&2; exit 1; }
+  IFS=$'\t' read -r file raw <<<"$lookup"
+  toggle_line "$file" "$raw"
+  echo "$file: toggled $id"
+}
+
+cmd_delete() {
+  local id="${1:-}"
+  [[ -z "$id" ]] && { echo "vault-task delete: id required" >&2; exit 1; }
+  local lookup file raw
+  lookup=$(lookup_id "$id")
+  [[ -z "$lookup" ]] && { echo "vault-task: id not found: $id" >&2; exit 1; }
+  IFS=$'\t' read -r file raw <<<"$lookup"
+  mutate_line "$file" "$raw" ""
+  echo "$file: - $id"
+}
+
+cmd_edit() {
+  local id="${1:-}"
+  shift || true
+  [[ -z "$id" ]] && { echo "vault-task edit: id required" >&2; exit 1; }
+
+  local lookup file raw
+  lookup=$(lookup_id "$id")
+  [[ -z "$lookup" ]] && { echo "vault-task: id not found: $id" >&2; exit 1; }
+  IFS=$'\t' read -r file raw <<<"$lookup"
+
+  local cur_json text time endt due priority recur tags description
+  cur_json=$(jq -c --arg id "$id" \
+    '[.today[]?, .other[]?, .completed[]?] | map(select(.id == $id)) | .[0]' \
+    "$JSON_CACHE")
+  text=$(jq -r '.text // ""' <<<"$cur_json")
+  time=$(jq -r '.time // ""' <<<"$cur_json")
+  endt=$(jq -r '.end_time // ""' <<<"$cur_json")
+  due=$(jq -r '.due // ""' <<<"$cur_json")
+  priority=$(jq -r '.priority // ""' <<<"$cur_json")
+  recur=$(jq -r '.recurring // ""' <<<"$cur_json")
+  tags=$(jq -r '.categories // [] | join(",")' <<<"$cur_json")
+  description=$(jq -r '.description // ""' <<<"$cur_json")
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --text)        text="$2"; shift 2 ;;
+      --time)        time="$2"; shift 2 ;;
+      --end)         endt="$2"; shift 2 ;;
+      --due)         due="$2"; shift 2 ;;
+      --priority)    priority="$2"; shift 2 ;;
+      --recur)       recur="$2"; shift 2 ;;
+      --tag)         tags="$2"; shift 2 ;;
+      --description) description="$2"; shift 2 ;;
+      *) echo "vault-task edit: unknown flag $1" >&2; exit 1 ;;
+    esac
+  done
+
+  local new_line
+  new_line=$(build_line "$text" "$time" "$endt" "$due" "$priority" "$recur" "$tags" "$description")
+  mutate_line "$file" "$raw" "$new_line"
+  echo "$file: edited $id → $new_line"
+}
+
+cmd_list() {
+  [[ -f "$JSON_CACHE" ]] || { echo "vault-task list: no cache; run 'today-tasks' first" >&2; exit 1; }
+  jq -r '[.today[]?, .other[]?] | .[] | "\(.id)\t\(.text)"' "$JSON_CACHE"
+}
+
+case "${1:-}" in
+  add)    shift; cmd_add "$@" ;;
+  toggle) shift; cmd_toggle "$@" ;;
+  delete|rm) shift; cmd_delete "$@" ;;
+  edit)   shift; cmd_edit "$@" ;;
+  list|ls) shift; cmd_list ;;
+  -h|--help|"") usage ;;
+  *) echo "vault-task: unknown command '$1'" >&2; usage; exit 1 ;;
+esac

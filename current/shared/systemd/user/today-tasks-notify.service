@@ -1,0 +1,13 @@
+[Unit]
+Description=Morning notification with today's tasks
+After=today-tasks.service
+Wants=today-tasks.service
+
+[Service]
+Type=oneshot
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStartPre=%h/.local/bin/today-tasks
+ExecStart=/usr/bin/bash -c 'if [ -s "$HOME/.cache/today-tasks.txt" ]; then notify-send --app-name="Today" --icon=view-list-symbolic "Today" "$(cat "$HOME/.cache/today-tasks.txt")"; fi'
+
+[Install]
+WantedBy=default.target

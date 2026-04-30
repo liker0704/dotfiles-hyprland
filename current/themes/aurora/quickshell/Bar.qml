@@ -7,6 +7,7 @@ import Quickshell.Services.Mpris
 import Quickshell.Widgets
 import QtQuick
 import QtQuick.Layouts
+import "services" as Svc
 
 PanelWindow {
     id: bar
@@ -28,6 +29,13 @@ PanelWindow {
     FileView { id: batStatus; path: "/sys/class/power_supply/BAT0/status"; watchChanges: true }
     property int batteryPercent: parseInt(batCapacity.text()) || 0
     property bool batteryCharging: (batStatus.text().trim() === "Charging")
+
+    // Tasks data — read via TaskService singleton (one watcher, one parser).
+    readonly property int todayCount:   Svc.TaskService.stats.todayCount
+    readonly property int otherCount:   Svc.TaskService.stats.otherCount
+    readonly property int taskCount:    Svc.TaskService.stats.totalActive
+    readonly property int eventCount:   Svc.TaskService.stats.eventCount
+    readonly property int overdueCount: Svc.TaskService.stats.overdueCount
 
     PwObjectTracker { objects: [Pipewire.defaultAudioSink] }
     property real volumeRaw: Pipewire.defaultAudioSink?.audio?.volume ?? 0
@@ -251,6 +259,56 @@ PanelWindow {
                     renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Quickshell.exec(["swaync-client", "-t", "-sw"]) }
                 }
+
+                Sep {}
+
+                // Today's tasks (vault + GCal — fed by ~/.local/bin/today-tasks)
+                Item {
+                    id: tasksArea
+                    Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: tasksRow.implicitWidth + (overdueDot.visible ? 8 : 0)
+                    implicitHeight: tasksRow.implicitHeight
+                    RowLayout {
+                        id: tasksRow; anchors.fill: parent; spacing: 4
+                        Text {
+                            text: "󰄬"; font.family: Appearance.font.mono; font.pixelSize: 16
+                            color: bar.overdueCount > 0 ? Md3.md3.error
+                                 : (bar.taskCount + bar.eventCount) > 0 ? Md3.md3.primary
+                                 : Colors.fgMuted
+                            Layout.alignment: Qt.AlignVCenter
+                            renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting
+                        }
+                        Text {
+                            text: (bar.todayCount + bar.eventCount).toString()
+                            font.family: Appearance.font.ui; font.pixelSize: 14; font.weight: Font.Bold
+                            color: Colors.fgDim; Layout.alignment: Qt.AlignVCenter
+                            renderType: Text.NativeRendering; font.hintingPreference: Font.PreferFullHinting
+                        }
+                        // Red dot for overdue count
+                        Rectangle {
+                            id: overdueDot
+                            visible: bar.overdueCount > 0
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.preferredWidth: 14
+                            Layout.preferredHeight: 14
+                            radius: 7
+                            color: Md3.md3.error
+                            Text {
+                                anchors.centerIn: parent
+                                text: bar.overdueCount.toString()
+                                font.family: Appearance.font.ui
+                                font.pixelSize: 9
+                                font.weight: Font.Bold
+                                color: "white"
+                                renderType: Text.NativeRendering
+                            }
+                        }
+                    }
+                    MouseArea {
+                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                        onClicked: todoPopup.toggle()
+                    }
+                }
             }
         }
     }
@@ -269,5 +327,36 @@ PanelWindow {
         popupWidth: 230; popupHeight: 260
         bgColor: Md3.md3.surface_container_high; borderColor: Md3.md3.outline_variant
         BatteryPopup { anchors.fill: parent; accent: Md3.md3.primary; fg: Colors.fg; fgDim: Colors.fgDim; fgMuted: Colors.fgMuted; bgHighlight: Md3.md3.surface_container_highest; percent: bar.batteryPercent; charging: bar.batteryCharging }
+    }
+
+    // Today's tasks popup — anchored under the tasks pill
+    PopupBase {
+        id: todoPopup; barWindow: bar; anchorItem: tasksArea
+        popupWidth: 460; popupHeight: 580
+        bgColor: Md3.md3.surface_container_high; borderColor: Md3.md3.outline_variant
+        TodoPopup {
+            id: todoContent
+            anchors.fill: parent
+            accent: Md3.md3.primary; fg: Colors.fg; fgDim: Colors.fgDim
+            fgMuted: Colors.fgMuted; bgHighlight: Md3.md3.surface_container_highest
+            onCloseRequested: todoPopup.open = false
+            Connections {
+                target: todoPopup
+                function onOpenChanged() {
+                    if (todoPopup.open) Qt.callLater(todoContent.forceActiveFocus)
+                }
+            }
+        }
+    }
+
+    // IPC for opening the task editor from a global keybind (Win+Shift+O).
+    // `enabled` is gated on focused-monitor so on multi-monitor setups the
+    // popup opens on the user's current screen — only one handler responds
+    // at a time, avoiding the "another handler registered" warning.
+    IpcHandler {
+        target: "todo"
+        enabled: bar.monitor && bar.monitor.focused
+        function toggle(): void { todoPopup.toggle() }
+        function open(): void { if (!todoPopup.open) todoPopup.toggle() }
     }
 }

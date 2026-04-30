@@ -1,0 +1,782 @@
+#!/usr/bin/env bash
+# Aggregate today's pending tasks (Obsidian vault + Google Calendar ICS)
+# into ~/.cache/today-tasks.txt and ~/.cache/today-tasks.json.
+#
+# Consumers: hyprlock label, Quickshell bar widget, notify-send.
+# Config: ~/.config/today-tasks/config (sourceable bash file).
+
+set -euo pipefail
+
+# ---- Defaults (overridable via config file or env) ----
+VAULT_PATH="${VAULT_PATH:-$HOME/Notes/MainVault}"
+VAULT_TASK_GLOBS="${VAULT_TASK_GLOBS:-*.md}"
+VAULT_TASK_EXCLUDES="${VAULT_TASK_EXCLUDES:-**/99_Archive/**,**/Templates/**}"
+DAILY_FOLDER="${DAILY_FOLDER:-01_Daily}"
+DAILY_DATE_FORMAT="${DAILY_DATE_FORMAT:-+%F}"
+TASK_LIMIT="${TASK_LIMIT:-12}"
+GCAL_ICS_URL="${GCAL_ICS_URL:-}"
+GCAL_WINDOW_HOURS="${GCAL_WINDOW_HOURS:-24}"
+GCAL_TZ="${GCAL_TZ:-}"
+declare -a GCAL_ICS_URLS=()
+
+SKIP_GCAL=0
+for arg in "$@"; do
+  case "$arg" in
+    --skip-gcal) SKIP_GCAL=1 ;;
+  esac
+done
+
+CONFIG_FILE="${TODAY_TASKS_CONFIG:-$HOME/.config/today-tasks/config}"
+[[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
+
+[[ ${#GCAL_ICS_URLS[@]} -eq 0 && -n "$GCAL_ICS_URL" ]] && GCAL_ICS_URLS=("$GCAL_ICS_URL")
+[[ -z "$GCAL_TZ" ]] && GCAL_TZ="$(timedatectl show --property=Timezone --value 2>/dev/null || echo UTC)"
+
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"
+TXT_FILE="$CACHE_DIR/today-tasks.txt"
+JSON_FILE="$CACHE_DIR/today-tasks.json"
+MTIME_FILE="$CACHE_DIR/today-tasks.mtime"
+mkdir -p "$CACHE_DIR"
+
+# ---- Collect vault tasks ----
+# Single pass over the whole vault, emits 3 buckets via stdout JSON:
+#   { "today": [...], "other": [...], "completed": [...] }
+# Each task includes id (sha1 of file:raw_line), file path, raw line, text,
+# time, end_time, due, priority, recurring, completed_at, categories, done.
+# The Python normalizer is the source of truth for parsing semantics.
+collect_all_vault_tasks() {
+  [[ -d "$VAULT_PATH" ]] || { echo '{"today":[],"other":[],"completed":[]}'; return 0; }
+  command -v rg >/dev/null 2>&1 || { echo '{"today":[],"other":[],"completed":[]}'; return 0; }
+  command -v python3 >/dev/null 2>&1 || { echo '{"today":[],"other":[],"completed":[]}'; return 0; }
+
+  local today_file="$VAULT_PATH/$DAILY_FOLDER/$(date "$DAILY_DATE_FORMAT").md"
+  local pattern='^\s*[-*+]\s*\[[ xX]?\]\s*\S'
+
+  local rg_args=(-H --no-heading --line-number --color=never)
+  rg_args+=(--glob "$VAULT_TASK_GLOBS")
+  IFS=',' read -ra excludes <<< "$VAULT_TASK_EXCLUDES"
+  for ex in "${excludes[@]}"; do
+    [[ -n "$ex" ]] && rg_args+=(--glob "!$ex")
+  done
+
+  { rg "${rg_args[@]}" "$pattern" "$VAULT_PATH" 2>/dev/null || true; } \
+    | TODAY_FILE="$today_file" normalize_tasks
+}
+
+# Read raw `file:line` task lines on stdin (rg -H output), normalize, bucket,
+# and emit a single JSON object: { "today": [...], "other": [...], "completed": [...] }.
+# Each task object: {id, file, raw, text, time, end_time, due, priority,
+#   recurring, completed_at, categories, done, overdue}.
+# Bucketing: today's daily file → "today"; done tasks → "completed";
+# everything else → "other". Future-due in "other" hides until the date.
+# NOTE: heredoc-via-process-substitution so stdin stays attached to the pipe
+#       and Python reads the script from a separate fd.
+normalize_tasks() {
+  python3 <(cat <<'PY'
+import sys, os, json, re, hashlib, datetime as dt
+
+today_iso = dt.date.today().isoformat()
+today_file = os.environ.get("TODAY_FILE", "")
+include_done = os.environ.get("INCLUDE_DONE", "1") != "0"
+
+TASK_RE = re.compile(r'^\s*[-*+]\s*\[(?P<state>[\sxX]?)\]\s*(?P<text>.+?)\s*$')
+
+# Time: prefix "14:00 ..." or "13 30 ..." (with optional range "- 14 30")
+TIME_PREFIX_RE = re.compile(
+    r'^(?P<h>\d{1,2})[:\s](?P<m>\d{2})'
+    r'(?:\s*[-–]\s*(?P<eh>\d{1,2})[:\s](?P<em>\d{2}))?'
+    r'\s+(?P<rest>.+)$'
+)
+TIME_INLINE_RE = re.compile(r'(?:@\s*|\bat\s+)(\d{1,2})[:\s](\d{2})\b')
+
+# Date — more specific markers first
+DATE_PATTERNS = [
+    (re.compile(r'\s*📅\s*(\d{4})-(\d{1,2})-(\d{1,2})'), 'ymd'),
+    (re.compile(r'\s*\((\d{4})-(\d{1,2})-(\d{1,2})\)'), 'ymd'),
+    (re.compile(r'\b(\d{4})[-./](\d{1,2})[-./](\d{1,2})\b'), 'ymd'),
+    (re.compile(r'\b(\d{1,2})[-./ ](\d{1,2})[-./ ](\d{4})\b'), 'dmy'),
+]
+
+# Obsidian Tasks plugin emoji metadata
+DONE_DATE_RE = re.compile(r'\s*✅\s*(\d{4})-(\d{1,2})-(\d{1,2})')
+PRIORITY_MAP = {'⏫': 'high', '🔼': 'medium', '🔽': 'low', '🔺': 'highest', '⏬': 'lowest'}
+PRIORITY_RE = re.compile(r'\s*(⏫|🔼|🔽|🔺|⏬)')
+RECUR_RE = re.compile(r'\s*🔁\s*every\s+(day|week|month|year)s?', re.IGNORECASE)
+TAG_RE = re.compile(r'(?<!\w)#([A-Za-z][\w/-]{0,40})')
+# Free-form description marker: everything after `description:` (case-insensitive)
+# until end of line. Extracted *before* other regex strippers so tags / emoji /
+# dates inside the description body are kept literally.
+DESCRIPTION_RE = re.compile(r'\s*description\s*:\s*(.+?)\s*$', re.IGNORECASE)
+
+
+def parse_date(groups, order):
+    try:
+        a, b, c = (int(g) for g in groups[:3])
+        if order == 'ymd':
+            return dt.date(a, b, c).isoformat()
+        if order == 'dmy':
+            return dt.date(c, b, a).isoformat()
+    except (ValueError, IndexError):
+        return None
+    return None
+
+
+def task_id(file_path, raw):
+    h = hashlib.sha1(f"{file_path}\0{raw}".encode("utf-8")).hexdigest()
+    return h[:16]
+
+
+def parse_task(file_path, raw):
+    m = TASK_RE.match(raw)
+    if not m:
+        return None
+    state = m.group('state') or ''
+    done = state.lower() == 'x'
+    if done and not include_done:
+        return None
+    text = m.group('text')
+
+    # Description (extracted first so its body — which may contain tags or
+    # emoji — isn't disturbed by the strippers below)
+    description = None
+    desc_m = DESCRIPTION_RE.search(text)
+    if desc_m:
+        body = desc_m.group(1).strip()
+        if body:
+            description = body
+        text = DESCRIPTION_RE.sub('', text).strip()
+
+    # Priority
+    priority = None
+    pm = PRIORITY_RE.search(text)
+    if pm:
+        priority = PRIORITY_MAP.get(pm.group(1))
+        text = PRIORITY_RE.sub('', text).strip()
+
+    # Recurring
+    recurring = None
+    rm = RECUR_RE.search(text)
+    if rm:
+        recurring = {'day': 'daily', 'week': 'weekly', 'month': 'monthly', 'year': 'yearly'}[rm.group(1).lower()]
+        text = RECUR_RE.sub('', text).strip()
+
+    # Done date (✅ YYYY-MM-DD)
+    completed_at = None
+    dd = DONE_DATE_RE.search(text)
+    if dd:
+        completed_at = parse_date(dd.groups(), 'ymd')
+        text = DONE_DATE_RE.sub('', text).strip()
+
+    # Categories (#tag)
+    categories = TAG_RE.findall(text)
+    if categories:
+        text = TAG_RE.sub('', text)
+
+    # Skip lines tagged `#examples` / `#example` — used in the Daily template
+    # and reference files to demo the format without leaking into the bar
+    # pill, popup, or GCal push.
+    if any(c.lower() in ('example', 'examples') for c in categories):
+        return None
+
+    # Time
+    time = None
+    end_time = None
+    tpm = TIME_PREFIX_RE.match(text)
+    if tpm:
+        h, mn = int(tpm.group('h')), int(tpm.group('m'))
+        if 0 <= h <= 23 and 0 <= mn <= 59:
+            time = f"{h:02d}:{mn:02d}"
+            if tpm.group('eh') is not None:
+                eh, em = int(tpm.group('eh')), int(tpm.group('em'))
+                if 0 <= eh <= 23 and 0 <= em <= 59:
+                    end_time = f"{eh:02d}:{em:02d}"
+            text = tpm.group('rest')
+    if not time:
+        im = TIME_INLINE_RE.search(text)
+        if im:
+            h, mn = int(im.group(1)), int(im.group(2))
+            if 0 <= h <= 23 and 0 <= mn <= 59:
+                time = f"{h:02d}:{mn:02d}"
+                text = TIME_INLINE_RE.sub('', text).strip()
+
+    # Due date
+    due = None
+    for pat, order in DATE_PATTERNS:
+        dm = pat.search(text)
+        if not dm:
+            continue
+        candidate = parse_date(dm.groups(), order)
+        if candidate:
+            due = candidate
+            text = pat.sub('', text).strip()
+            break
+
+    text = re.sub(r'\s+', ' ', text).strip()
+    if not text:
+        return None
+
+    overdue = (not done) and (due is not None) and (due < today_iso)
+
+    return {
+        'id': task_id(file_path, raw),
+        'file': file_path,
+        'raw': raw,
+        'text': text,
+        'time': time,
+        'end_time': end_time,
+        'due': due,
+        'priority': priority,
+        'recurring': recurring,
+        'completed_at': completed_at,
+        'categories': categories,
+        'description': description,
+        'done': done,
+        'overdue': overdue,
+    }
+
+
+def comment_line_ranges(file_path):
+    """Return set of 1-based line numbers that fall inside Obsidian %% ... %%
+    comment blocks. Tasks inside these blocks are documentation, not real
+    tasks (e.g. the example lines in the Daily.md template), and must not
+    leak into the bar pill or popup."""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as fh:
+            text = fh.read()
+    except OSError:
+        return set()
+    inside = set()
+    open_line = None
+    for ln_num, ln in enumerate(text.splitlines(), 1):
+        i = 0
+        while True:
+            j = ln.find('%%', i)
+            if j < 0:
+                break
+            if open_line is None:
+                open_line = ln_num
+            else:
+                for k in range(open_line, ln_num + 1):
+                    inside.add(k)
+                open_line = None
+            i = j + 2
+        if open_line is not None and open_line < ln_num:
+            inside.add(ln_num)
+    return inside
+
+
+comment_cache = {}
+buckets = {'today': [], 'other': [], 'completed': []}
+seen_ids = set()
+for line in sys.stdin:
+    line = line.rstrip('\n')
+    if not line:
+        continue
+    # rg -H --line-number emits "path:line_no:content"
+    file_path, _, rest = line.partition(':')
+    line_no_str, _, raw = rest.partition(':')
+    if not raw:
+        continue
+    try:
+        line_no = int(line_no_str)
+    except ValueError:
+        continue
+    if file_path not in comment_cache:
+        comment_cache[file_path] = comment_line_ranges(file_path)
+    if line_no in comment_cache[file_path]:
+        continue
+    t = parse_task(file_path, raw)
+    if t is None:
+        continue
+    if t['id'] in seen_ids:
+        continue
+    seen_ids.add(t['id'])
+
+    if t['done']:
+        # Cap completed bucket to last 50 by completed_at desc — for editor's tab
+        buckets['completed'].append(t)
+    elif file_path == today_file:
+        buckets['today'].append(t)
+    else:
+        buckets['other'].append(t)
+
+# Sort completed by completed_at desc, then by file
+buckets['completed'].sort(key=lambda x: (x.get('completed_at') or '0000', x['file']), reverse=True)
+buckets['completed'] = buckets['completed'][:50]
+# Sort active by: (overdue first), then due asc (None last), then time asc (None last)
+def active_sort(t):
+    return (
+        0 if t['overdue'] else 1,
+        t['due'] or '9999-99-99',
+        t['time'] or '99:99',
+        t['text'].lower(),
+    )
+buckets['today'].sort(key=active_sort)
+buckets['other'].sort(key=active_sort)
+
+print(json.dumps(buckets, ensure_ascii=False))
+PY
+)
+}
+
+# ---- Collect today's GCal events ----
+# Dispatches: gcalcli (preferred, OAuth API) → ICS fallback → nothing.
+# Output: tab-separated "<HH:MM-or-all-day>\t<title>" lines on stdout.
+collect_gcal_events() {
+  if [[ -n "${GCAL_CALENDAR_ID:-}" ]] && command -v gcalcli >/dev/null 2>&1; then
+    collect_gcal_events_via_gcalcli && return 0
+  fi
+  collect_gcal_events_via_ics
+}
+
+# Quick auth probe: returns 0 only if gcalcli has working credentials.
+# Skips push/agenda when user hasn't run `gcalcli init` yet — important so
+# the script doesn't hang on the OAuth interactive flow.
+gcalcli_authed() {
+  command -v gcalcli >/dev/null 2>&1 || return 1
+  timeout 5 gcalcli --nocolor list >/dev/null 2>&1
+}
+
+# Read events via gcalcli's TSV agenda output. Skips silently on auth/empty.
+collect_gcal_events_via_gcalcli() {
+  gcalcli_authed || return 1
+
+  local start end
+  start="$(date '+%Y-%m-%d 00:00')"
+  end="$(date -d 'tomorrow' '+%Y-%m-%d 00:00' 2>/dev/null || date -v+1d '+%Y-%m-%d 00:00' 2>/dev/null)"
+  [[ -z "$end" ]] && return 1
+
+  # gcalcli agenda --tsv emits: start_date\tstart_time\tend_date\tend_time\ttitle
+  # All-day events have empty time fields.
+  timeout 10 gcalcli --nocolor --calendar "$GCAL_CALENDAR_ID" \
+    agenda --tsv "$start" "$end" 2>/dev/null \
+    | awk -F'\t' 'NF >= 5 {
+        time = ($2 == "" ? "all-day" : $2)
+        title = $5
+        for (i=6; i<=NF; i++) title = title "\t" $i
+        gsub(/^[ \t]+|[ \t]+$/, "", title)
+        if (title != "") print time "\t" title
+      }'
+}
+
+# ---- ICS fallback (read-only, no OAuth) ----
+collect_gcal_events_via_ics() {
+  [[ ${#GCAL_ICS_URLS[@]} -gt 0 ]] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+
+  GCAL_TZ="$GCAL_TZ" GCAL_WINDOW_HOURS="$GCAL_WINDOW_HOURS" python3 - "${GCAL_ICS_URLS[@]}" <<'PY'
+import os, sys, re, urllib.request, datetime as dt
+from zoneinfo import ZoneInfo
+
+try:
+    from icalendar import Calendar
+    HAS_ICAL = True
+except ImportError:
+    HAS_ICAL = False
+
+try:
+    import recurring_ical_events as rie
+    HAS_RIE = True
+except ImportError:
+    HAS_RIE = False
+
+tz = ZoneInfo(os.environ.get("GCAL_TZ") or "UTC")
+window_h = int(os.environ.get("GCAL_WINDOW_HOURS") or 24)
+now = dt.datetime.now(tz)
+start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+end = start + dt.timedelta(hours=window_h)
+
+
+# ---- Fallback parser (used when python-icalendar not installed) ----
+WEEKDAY_MAP = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
+
+
+def parse_ics_dt(value, params):
+    is_date_only = params.get("VALUE") == "DATE"
+    tzid = params.get("TZID")
+    s = value.strip()
+    if is_date_only or len(s) == 8:
+        d = dt.date(int(s[:4]), int(s[4:6]), int(s[6:8]))
+        return dt.datetime(d.year, d.month, d.day, tzinfo=tz), True
+    is_utc = s.endswith("Z")
+    s = s.rstrip("Z").replace("T", "")
+    if len(s) >= 14:
+        dtv = dt.datetime(int(s[:4]), int(s[4:6]), int(s[6:8]),
+                          int(s[8:10]), int(s[10:12]), int(s[12:14]))
+    else:
+        return None, False
+    if is_utc:
+        dtv = dtv.replace(tzinfo=ZoneInfo("UTC"))
+    elif tzid:
+        try:
+            dtv = dtv.replace(tzinfo=ZoneInfo(tzid))
+        except Exception:
+            dtv = dtv.replace(tzinfo=tz)
+    else:
+        dtv = dtv.replace(tzinfo=tz)
+    return dtv.astimezone(tz), False
+
+
+def parse_rrule(s):
+    return dict(p.split("=", 1) for p in s.split(";") if "=" in p)
+
+
+def expand_rrule(start_dt, rrule, until):
+    freq = rrule.get("FREQ", "")
+    interval = int(rrule.get("INTERVAL", 1))
+    count = int(rrule["COUNT"]) if "COUNT" in rrule else None
+    rr_until = None
+    if "UNTIL" in rrule:
+        u, _ = parse_ics_dt(rrule["UNTIL"], {})
+        rr_until = u
+    bydays = [WEEKDAY_MAP[d] for d in rrule.get("BYDAY", "").split(",") if d in WEEKDAY_MAP]
+
+    occurrences = []
+    cur = start_dt
+    n = 0
+    safety = 0
+    while cur <= until and safety < 5000:
+        safety += 1
+        if rr_until and cur > rr_until:
+            break
+        if count is not None and n >= count:
+            break
+        if not bydays or cur.weekday() in bydays:
+            occurrences.append(cur)
+            n += 1
+        if freq == "DAILY":
+            cur += dt.timedelta(days=interval)
+        elif freq == "WEEKLY":
+            if bydays:
+                cur += dt.timedelta(days=1)
+                if cur.weekday() == start_dt.weekday():
+                    cur += dt.timedelta(days=7 * (interval - 1))
+            else:
+                cur += dt.timedelta(weeks=interval)
+        elif freq == "MONTHLY":
+            month = cur.month + interval
+            year = cur.year + (month - 1) // 12
+            month = ((month - 1) % 12) + 1
+            try:
+                cur = cur.replace(year=year, month=month)
+            except ValueError:
+                break
+        elif freq == "YEARLY":
+            try:
+                cur = cur.replace(year=cur.year + interval)
+            except ValueError:
+                break
+        else:
+            break
+    return occurrences
+
+
+def parse_ics_fallback(text, win_start, win_end):
+    out = []
+    # Unfold continuation lines (RFC 5545: lines beginning with space/tab)
+    text = re.sub(r"\r?\n[ \t]", "", text)
+    in_event = False
+    event = {}
+    for line in text.split("\n"):
+        line = line.rstrip("\r")
+        if line == "BEGIN:VEVENT":
+            in_event = True
+            event = {}
+            continue
+        if line == "END:VEVENT":
+            in_event = False
+            try:
+                if "DTSTART" not in event or "SUMMARY" not in event:
+                    continue
+                ds_raw, ds_params = event["DTSTART"]
+                dtv, all_day = parse_ics_dt(ds_raw, ds_params)
+                if dtv is None:
+                    continue
+                summary = event["SUMMARY"][0].replace("\\,", ",").replace("\\n", " ").replace("\\;", ";").strip() or "(no title)"
+                if "RRULE" in event:
+                    rule = parse_rrule(event["RRULE"][0])
+                    occs = expand_rrule(dtv, rule, win_end + dt.timedelta(days=1))
+                    for occ in occs:
+                        if win_start <= occ < win_end:
+                            time_str = "all-day" if all_day else occ.strftime("%H:%M")
+                            out.append((occ, time_str, summary))
+                else:
+                    if win_start <= dtv < win_end:
+                        time_str = "all-day" if all_day else dtv.strftime("%H:%M")
+                        out.append((dtv, time_str, summary))
+            except Exception:
+                pass
+            continue
+        if not in_event or ":" not in line:
+            continue
+        keypart, _, value = line.partition(":")
+        keyparts = keypart.split(";")
+        name = keyparts[0]
+        params = dict(p.split("=", 1) for p in keyparts[1:] if "=" in p)
+        event[name] = (value, params)
+    return out
+
+
+events = []
+for url in sys.argv[1:]:
+    url = url.strip()
+    if not url:
+        continue
+    try:
+        with urllib.request.urlopen(url, timeout=15) as r:
+            raw = r.read()
+    except Exception:
+        continue
+
+    if HAS_ICAL:
+        try:
+            cal = Calendar.from_ical(raw)
+        except Exception:
+            cal = None
+        if cal is not None:
+            occurrences = (rie.of(cal).between(start, end)
+                           if HAS_RIE else list(cal.walk("VEVENT")))
+            for ev in occurrences:
+                try:
+                    summary = str(ev.get("SUMMARY") or "").strip() or "(no title)"
+                    ds = ev.get("DTSTART")
+                    if ds is None:
+                        continue
+                    d = ds.dt
+                    if isinstance(d, dt.datetime):
+                        if d.tzinfo is None:
+                            d = d.replace(tzinfo=tz)
+                        d_local = d.astimezone(tz)
+                    else:
+                        d_local = dt.datetime(d.year, d.month, d.day, tzinfo=tz)
+                    if not (start <= d_local < end):
+                        continue
+                    all_day = not isinstance(ds.dt, dt.datetime)
+                    time_str = "all-day" if all_day else d_local.strftime("%H:%M")
+                    events.append((d_local, time_str, summary))
+                except Exception:
+                    continue
+            continue
+
+    # Fallback path — pure-Python parser
+    try:
+        events.extend(parse_ics_fallback(raw.decode("utf-8", errors="replace"), start, end))
+    except Exception:
+        continue
+
+events.sort(key=lambda e: e[0])
+for _, t, s in events:
+    print(f"{t}\t{s}")
+PY
+}
+
+# ---- Build cache files ----
+buckets_json="$(collect_all_vault_tasks)"
+[[ -n "$buckets_json" ]] || buckets_json='{"today":[],"other":[],"completed":[]}'
+
+today_json="$(jq -c '.today // []' <<<"$buckets_json")"
+other_json="$(jq -c '.other // []' <<<"$buckets_json")"
+completed_json="$(jq -c '.completed // []' <<<"$buckets_json")"
+
+if [[ $SKIP_GCAL -eq 1 ]]; then
+  # Reuse last events from cached JSON to avoid network on hot path
+  if [[ -f "$JSON_FILE" ]]; then
+    events_json="$(jq -c '.events // []' "$JSON_FILE" 2>/dev/null)"
+    [[ -n "$events_json" ]] || events_json='[]'
+  else
+    events_json='[]'
+  fi
+else
+  mapfile -t gcal_events < <(collect_gcal_events)
+  events_json="$(
+    {
+      printf '['
+      first=1
+      for line in "${gcal_events[@]}"; do
+        IFS=$'\t' read -r tm sm <<<"$line"
+        [[ $first -eq 1 ]] || printf ','
+        printf '{"time":%s,"title":%s}' \
+          "$(jq -Rn --arg s "$tm" '$s')" \
+          "$(jq -Rn --arg s "$sm" '$s')"
+        first=0
+      done
+      printf ']'
+    }
+  )"
+fi
+
+# ---- Push timed today-tasks to Google Calendar (vault → GCal) ----
+# Only runs when GCAL_CALENDAR_ID is set and gcalcli is authenticated.
+# Tracks per-task push state in ~/.cache/today-tasks-gcal-state.json so we
+# only push once per task and only re-push if text/time changes.
+GCAL_STATE_FILE="$CACHE_DIR/today-tasks-gcal-state.json"
+push_gcal() {
+  [[ $SKIP_GCAL -eq 1 ]] && return 0
+  [[ -n "${GCAL_CALENDAR_ID:-}" ]] || return 0
+  gcalcli_authed || return 0
+  [[ -f "$GCAL_STATE_FILE" ]] || echo '{"pushed":{}}' > "$GCAL_STATE_FILE"
+
+  local default_duration="${GCAL_DEFAULT_DURATION:-60}"
+  local today_iso
+  today_iso="$(date +%F)"
+
+  # Phase 1: delete gcal events for tasks no longer in today's bucket.
+  # This MUST run before phase 2 (adds), because vault-task edit/toggle
+  # rewrites the raw line → task_id changes, so an "edited" task looks like
+  # an old id disappearing + a new id appearing. If we added the new event
+  # first, the title-based delete would also match (and wipe) the freshly
+  # added event.
+  while IFS=$'\t' read -r gone_id gone_title gone_when; do
+    [[ -z "$gone_id" || -z "$gone_title" || -z "$gone_when" ]] && continue
+    local gone_day="${gone_when%% *}"
+    timeout 15 gcalcli --nocolor --calendar "$GCAL_CALENDAR_ID" delete --iamaexpert \
+      "$gone_title" "$gone_day 00:00" "$gone_day 23:59" >/dev/null 2>&1 || true
+  done < <(
+    jq -r --argjson active "$(jq '[.[]?.id]' <<<"$today_json")" '
+      .pushed | to_entries
+      | map(select(.key as $k | $active | index($k) | not))
+      | .[] | [.key, .value.last_title // "", .value.last_when // ""] | @tsv
+    ' "$GCAL_STATE_FILE"
+  )
+
+  # Drop state for ids that no longer exist (so phase 2 sees the canonical
+  # active set; otherwise stale entries linger forever).
+  local active_ids
+  active_ids=$(jq -r '[.[]?.id] | @tsv' <<<"$today_json")
+  jq --arg active "$active_ids" '
+    .pushed |= with_entries(select(.key as $k | $active | split("\t") | index($k)))
+  ' "$GCAL_STATE_FILE" > "$GCAL_STATE_FILE.tmp" 2>/dev/null \
+    && mv "$GCAL_STATE_FILE.tmp" "$GCAL_STATE_FILE" || true
+
+  # Phase 2: push currently-active timed tasks (idempotent via hash).
+  local push_count=0
+  while IFS= read -r tsv_line; do
+    # Bash's `read` with IFS=$'\t' collapses consecutive empty TAB fields
+    # (because TAB is whitespace-in-IFS), so explicitly split — otherwise a
+    # task with empty end_time + empty priority would shift description into
+    # the wrong slot.
+    local parts=()
+    local rest="$tsv_line"
+    while [[ "$rest" == *$'\t'* ]]; do
+      parts+=("${rest%%$'\t'*}")
+      rest="${rest#*$'\t'}"
+    done
+    parts+=("$rest")
+    local task_id="${parts[0]:-}"
+    local text="${parts[1]:-}"
+    local time="${parts[2]:-}"
+    local end_time="${parts[3]:-}"
+    local priority="${parts[4]:-}"
+    local description="${parts[5]:-}"
+    [[ -z "$task_id" || -z "$time" ]] && continue
+    # Hash includes description so edits to it trigger a re-push (delete-old
+    # + add-new via the Phase 1 / 2 split).
+    local hash="${text}|${time}|${end_time}|${description}"
+
+    # Skip if unchanged since last push
+    local prev_hash
+    prev_hash=$(jq -r --arg id "$task_id" '.pushed[$id].hash // ""' "$GCAL_STATE_FILE")
+    [[ "$prev_hash" == "$hash" ]] && continue
+
+    # Compute duration
+    local duration="$default_duration"
+    if [[ -n "$end_time" ]]; then
+      duration=$(python3 -c "
+import sys, datetime as dt
+s, e = '$time', '$end_time'
+sh, sm = map(int, s.split(':'))
+eh, em = map(int, e.split(':'))
+d = (eh*60+em) - (sh*60+sm)
+print(d if d > 0 else $default_duration)
+" 2>/dev/null || echo "$default_duration")
+    fi
+
+    local title="$text"
+    [[ "$priority" == "high" ]] && title="⏫ $title"
+
+    # Run gcalcli add (non-interactive)
+    local add_args=(--noprompt --title "$title"
+                    --when "$today_iso $time" --duration "$duration")
+    [[ -n "$description" ]] && add_args+=(--description "$description")
+    if timeout 15 gcalcli --nocolor --calendar "$GCAL_CALENDAR_ID" add \
+        "${add_args[@]}" >/dev/null 2>&1; then
+      jq --arg id "$task_id" --arg hash "$hash" --arg ts "$(date -Iseconds)" \
+         --arg cal "$GCAL_CALENDAR_ID" --arg ttl "$title" \
+         --arg whn "$today_iso $time" \
+         '.pushed[$id] = {hash: $hash, calendar_id: $cal, pushed_at: $ts,
+                          last_title: $ttl, last_when: $whn}' \
+         "$GCAL_STATE_FILE" > "$GCAL_STATE_FILE.tmp" && mv "$GCAL_STATE_FILE.tmp" "$GCAL_STATE_FILE"
+      ((push_count++))
+    fi
+  done < <(
+    jq -r '.[]? | select(.time != null) |
+           [.id, .text, .time, (.end_time // ""), (.priority // ""),
+            (.description // "")] | @tsv' \
+      <<<"$today_json"
+  )
+}
+push_gcal || true
+
+today_count=$(jq 'length' <<<"$today_json")
+other_count=$(jq 'length' <<<"$other_json")
+completed_count=$(jq 'length' <<<"$completed_json")
+events_count=$(jq 'length' <<<"$events_json")
+overdue_count=$(jq '[.[][] | select(.overdue == true)] | length' <<<"$buckets_json" 2>/dev/null || echo 0)
+upcoming_count=$(jq --arg today "$(date +%F)" '[.other[] | select(.due != null and .due > $today)] | length' <<<"$buckets_json" 2>/dev/null || echo 0)
+
+# Build display txt via jq — events → today → vault (today-relevant only),
+# trimmed to TASK_LIMIT total. Future-due tasks are hidden in this view; they
+# remain in the JSON for the editor's "Upcoming" tab.
+TXT_OUT="$(jq -r --argjson events "$events_json" \
+                --argjson today "$today_json" \
+                --argjson other "$other_json" \
+                --argjson limit "$TASK_LIMIT" \
+                --arg today_iso "$(date +%F)" '
+  def fmt_event: "📅 \(.time // "")  \(.title // "")";
+  def fmt_time:  if .end_time then "\(.time)–\(.end_time)" else .time end;
+  def fmt_task:  if .time then "☐ \(fmt_time)  \(.text)" else "☐ \(.text)" end;
+  def fmt_due:   if .due then " · 📅\(.due)" else "" end;
+  def render_task: fmt_task + fmt_due;
+  def actionable_today: select(.due == null or .due <= $today_iso);
+
+  ([
+    ($events | map(fmt_event)),
+    (if ($today | length) > 0 then ["── Today ──"] + ($today | map(actionable_today | render_task)) else [] end),
+    (($other | map(actionable_today | render_task)) as $vault_lines |
+      if ($vault_lines | length) > 0 then ["── Vault ──"] + $vault_lines else [] end)
+  ] | add | .[0:$limit]) as $lines |
+  if ($lines | length) == 0 then "✓ Inbox zero" else ($lines | join("\n")) end
+' <<<'null')"
+
+tmp_txt="$(mktemp)"
+printf '%s\n' "$TXT_OUT" > "$tmp_txt"
+mv "$tmp_txt" "$TXT_FILE"
+
+# Write JSON (atomic, via jq for proper escaping)
+tmp_json="$(mktemp)"
+jq -n --arg generated_at "$(date -Iseconds)" \
+      --argjson events "$events_json" \
+      --argjson today "$today_json" \
+      --argjson other "$other_json" \
+      --argjson completed "$completed_json" \
+      --argjson events_count "$events_count" \
+      --argjson today_count "$today_count" \
+      --argjson other_count "$other_count" \
+      --argjson completed_count "$completed_count" \
+      --argjson overdue_count "$overdue_count" \
+      --argjson upcoming_count "$upcoming_count" \
+      '{generated_at: $generated_at,
+        events: $events,
+        today: $today, other: $other, completed: $completed,
+        counts: {events: $events_count, today: $today_count, other: $other_count,
+                 completed: $completed_count, overdue: $overdue_count,
+                 upcoming: $upcoming_count}}' \
+  > "$tmp_json"
+mv "$tmp_json" "$JSON_FILE"
+
+date +%s > "$MTIME_FILE"
+
+# Push-update hyprlock if running
+if pgrep -x hyprlock >/dev/null 2>&1; then
+  pkill -SIGUSR2 hyprlock 2>/dev/null || true
+fi

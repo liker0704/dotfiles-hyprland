@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh today's tasks cache every 15 minutes
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=15min
+Persistent=true
+Unit=today-tasks.service
+
+[Install]
+WantedBy=timers.target

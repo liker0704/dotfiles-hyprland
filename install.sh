@@ -121,9 +121,13 @@ FILE_MAPS=(
   "scripts/obsidian:$REAL_HOME/.local/bin/obsidian"
   "scripts/obsidian-notes:$REAL_HOME/.local/bin/obsidian-notes"
   "scripts/note:$REAL_HOME/.local/bin/note"
+  "scripts/today-tasks:$REAL_HOME/.local/bin/today-tasks"
+  "scripts/today-tasks-watch:$REAL_HOME/.local/bin/today-tasks-watch"
+  "scripts/vault-task:$REAL_HOME/.local/bin/vault-task"
   "applications/obsidian-mainvault.desktop:$REAL_HOME/.local/share/applications/obsidian-mainvault.desktop"
   "applications/nvim.desktop:$REAL_HOME/.local/share/applications/nvim.desktop"
   "mimeapps.list:$REAL_HOME/.config/mimeapps.list"
+  "today-tasks/config.example:$REAL_HOME/.config/today-tasks/config.example"
   ".zshrc:$REAL_HOME/.zshrc"
   ".p10k.zsh:$REAL_HOME/.p10k.zsh"
 )
@@ -131,6 +135,7 @@ FILE_MAPS=(
 # special dir mapping (shared only)
 SPECIAL_DIR_MAPS=(
   "scripts/theme-modules:$REAL_HOME/.local/share/theme"
+  "systemd/user:$REAL_HOME/.config/systemd/user"
 )
 
 # Protected files (user data, don't overwrite unless --force)
@@ -140,6 +145,7 @@ PROTECTED=(
   "$REAL_HOME/.config/theme/custom-themes.json"
   "$REAL_HOME/.config/theme/config"
   "$REAL_HOME/.config/theme/gogh-themes.json"
+  "$REAL_HOME/.config/today-tasks/config"
 )
 
 # --- Helpers ---
@@ -228,12 +234,21 @@ if $DRY_RUN; then
   for p in "${PROTECTED[@]}"; do
     [[ -f "$p" ]] && log_skip "$p" || log_dry "$p ${DIM}(missing, will create)${RESET}"
   done
+  echo -e "\n${BOLD}Obsidian templates (only if missing):${RESET}"
+  if [[ -d "$SHARED_SRC/obsidian-templates" ]]; then
+    while IFS= read -r -d '' tpl; do
+      base="$(basename "$tpl")"
+      tgt="$REAL_HOME/Notes/MainVault/Templates/$base"
+      [[ -e "$tgt" ]] && log_skip "$tgt" || log_dry "$tpl → $tgt"
+    done < <(find "$SHARED_SRC/obsidian-templates" -mindepth 1 -maxdepth 1 -print0)
+  fi
   echo -e "\n${BOLD}Symlink:${RESET}"
   log_dry "/usr/local/bin/theme → $REAL_HOME/.local/bin/theme"
   echo -e "\n${BOLD}Post-install:${RESET}"
   log_dry "mark active theme: ~/.config/dotfiles-theme = $THEME"
   log_dry "mark os: ~/.config/dotfiles-os = $OS"
   log_dry "theme sync"
+  log_dry "systemctl --user daemon-reload + enable today-tasks{,-watch,-notify} units"
   exit 0
 fi
 
@@ -301,7 +316,10 @@ chmod +x "$REAL_HOME/.local/bin/theme" \
          "$REAL_HOME/.local/bin/kitty-raw" \
          "$REAL_HOME/.local/bin/obsidian" \
          "$REAL_HOME/.local/bin/obsidian-notes" \
-         "$REAL_HOME/.local/bin/note" 2>/dev/null || true
+         "$REAL_HOME/.local/bin/note" \
+         "$REAL_HOME/.local/bin/today-tasks" \
+         "$REAL_HOME/.local/bin/today-tasks-watch" \
+         "$REAL_HOME/.local/bin/vault-task" 2>/dev/null || true
 
 for _script_dir in \
   "$REAL_HOME/.local/bin" \
@@ -328,6 +346,22 @@ chown -R "$REAL_USER:$REAL_USER" \
   "$REAL_HOME/.p10k.zsh" \
   "$BACKUP_BASE" \
   2>/dev/null || true
+
+# --- Obsidian templates (install only if missing — never clobber user edits) ---
+if [[ -d "$SHARED_SRC/obsidian-templates" ]]; then
+  TPL_DST="$REAL_HOME/Notes/MainVault/Templates"
+  mkdir -p "$TPL_DST"
+  while IFS= read -r -d '' tpl; do
+    base="$(basename "$tpl")"
+    if [[ ! -e "$TPL_DST/$base" ]]; then
+      cp -a "$tpl" "$TPL_DST/$base"
+      log_ok "obsidian-templates/$base ${DIM}(new)${RESET}"
+    else
+      log_skip "obsidian-templates/$base"
+    fi
+  done < <(find "$SHARED_SRC/obsidian-templates" -mindepth 1 -maxdepth 1 -print0)
+  chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/Notes" 2>/dev/null || true
+fi
 
 # --- Meta markers ---
 echo "$THEME" | sudo -u "$REAL_USER" tee "$REAL_HOME/.config/dotfiles-theme" >/dev/null
@@ -358,6 +392,33 @@ log_ok "/usr/local/bin/theme → ~/.local/bin/theme"
 echo ""
 echo -e "${BOLD}Running theme sync...${RESET}"
 sudo -u "$REAL_USER" "$REAL_HOME/.local/bin/theme" sync 2>&1 || true
+
+# --- today-tasks: reload systemd user units, enable timers + watcher ---
+echo ""
+echo -e "${BOLD}Enabling today-tasks units...${RESET}"
+if [[ -f "$REAL_HOME/.config/systemd/user/today-tasks.service" ]]; then
+  sudo -u "$REAL_USER" XDG_RUNTIME_DIR="/run/user/$(id -u "$REAL_USER")" \
+    systemctl --user daemon-reload 2>/dev/null || true
+  for unit in today-tasks.timer today-tasks-notify.timer today-tasks-watch.service; do
+    sudo -u "$REAL_USER" XDG_RUNTIME_DIR="/run/user/$(id -u "$REAL_USER")" \
+      systemctl --user enable --now "$unit" >/dev/null 2>&1 \
+      && log_ok "systemd --user: $unit" \
+      || echo -e "  ${YELLOW}~${RESET} $unit ${DIM}(enable failed — run manually if needed)${RESET}"
+  done
+fi
+
+# --- today-tasks: hint about gcalcli + config ---
+if [[ ! -f "$REAL_HOME/.config/today-tasks/config" ]] \
+   && [[ -f "$REAL_HOME/.config/today-tasks/config.example" ]]; then
+  echo ""
+  echo -e "${YELLOW}today-tasks:${RESET} no config yet — copy the example and edit:"
+  echo -e "  ${DIM}cp ~/.config/today-tasks/config.example ~/.config/today-tasks/config${RESET}"
+  echo -e "  ${DIM}# then set GCAL_CALENDAR_ID (or GCAL_ICS_URLS) inside${RESET}"
+fi
+if ! command -v gcalcli >/dev/null 2>&1; then
+  echo -e "${YELLOW}today-tasks:${RESET} gcalcli not installed — for two-way GCal sync run:"
+  echo -e "  ${DIM}pipx install gcalcli && gcalcli init${RESET}"
+fi
 
 echo ""
 echo -e "${GREEN}${BOLD}Done!${RESET}  ${DIM}(theme: $THEME, os: $OS)${RESET}"

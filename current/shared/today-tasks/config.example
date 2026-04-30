@@ -1,0 +1,42 @@
+# today-tasks aggregator config — sourced as bash by ~/.local/bin/today-tasks
+#
+# Copy to ~/.config/today-tasks/config and edit. Lines beginning with `#` are
+# defaults — uncomment to override.
+
+# ---- Vault ----
+# VAULT_PATH="$HOME/Notes/MainVault"
+# VAULT_TASK_GLOBS="*.md"
+# VAULT_TASK_EXCLUDES="**/99_Archive/**,**/Templates/**"
+# DAILY_FOLDER="01_Daily"
+
+# Max number of tasks shown in display txt (cache file for hyprlock + notify).
+# TASK_LIMIT=12
+
+# ====================================================================
+#  Google Calendar — preferred path: gcalcli (OAuth, two-way)
+# ====================================================================
+#
+# Setup once:
+#   pipx install gcalcli
+#   gcalcli init                             # opens browser, sign in
+#   gcalcli list                             # shows calendar IDs
+#
+# Then set GCAL_CALENDAR_ID below. Common value is your email (primary):
+
+# GCAL_CALENDAR_ID="you@example.com"
+
+# Default duration (minutes) for tasks that have a start time but no end time.
+# GCAL_DEFAULT_DURATION=60
+
+# ====================================================================
+#  Fallback: read-only ICS subscription (no OAuth, no write-back)
+# ====================================================================
+# Used automatically if GCAL_CALENDAR_ID is empty or gcalcli is missing.
+#
+# GCAL_ICS_URLS=("https://calendar.google.com/calendar/ical/<ENCODED-EMAIL>/private-<TOKEN>/basic.ics")
+
+# Timezone for ICS event display. Auto-detected from `timedatectl` if blank.
+# GCAL_TZ="Europe/Berlin"
+
+# Hours window for ICS pull. Default: 24 (today only).
+# GCAL_WINDOW_HOURS=24

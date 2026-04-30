@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Watch the Obsidian vault for changes and refresh today-tasks cache instantly.
+# Debounces bursts (multiple saves in a row) into a single refresh.
+# Today's daily file → full run (so timed tasks push to GCal within seconds);
+# other vault edits → --skip-gcal (network avoided; 15-min timer covers them).
+
+set -euo pipefail
+
+VAULT_PATH="${VAULT_PATH:-$HOME/Notes/MainVault}"
+DAILY_FOLDER="${DAILY_FOLDER:-01_Daily}"
+DAILY_DATE_FORMAT="${DAILY_DATE_FORMAT:-+%F}"
+DEBOUNCE_SECONDS="${TODAY_TASKS_DEBOUNCE:-1}"
+
+CONFIG_FILE="${TODAY_TASKS_CONFIG:-$HOME/.config/today-tasks/config}"
+[[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
+
+[[ -d "$VAULT_PATH" ]] || { echo "Vault not found: $VAULT_PATH" >&2; exit 1; }
+command -v inotifywait >/dev/null 2>&1 || { echo "inotifywait missing (pacman -S inotify-tools)" >&2; exit 1; }
+
+PENDING_PID=""
+PENDING_FULL=0
+trap '[[ -n "$PENDING_PID" ]] && kill "$PENDING_PID" 2>/dev/null || true' EXIT
+
+while read -r path; do
+  # Filter: must end in .md, must not be inside 99_Archive/, .git/, or .obsidian/{workspace,cache}
+  case "$path" in
+    *.md) ;;
+    *) continue ;;
+  esac
+  case "$path" in
+    */99_Archive/*|*/.git/*|*/.obsidian/workspace*|*/.obsidian/cache*) continue ;;
+  esac
+
+  today_daily="$VAULT_PATH/$DAILY_FOLDER/$(date "$DAILY_DATE_FORMAT").md"
+  full_run=0
+  [[ "$path" == "$today_daily" ]] && full_run=1
+
+  # If a refresh is already pending and it's already a full run, keep it
+  # (full subsumes skip-gcal). Otherwise replace with whichever this event
+  # needs.
+  if [[ -n "$PENDING_PID" ]] && kill -0 "$PENDING_PID" 2>/dev/null; then
+    if [[ $PENDING_FULL -eq 1 ]]; then
+      continue
+    fi
+    kill "$PENDING_PID" 2>/dev/null || true
+  fi
+  if [[ $full_run -eq 1 ]]; then
+    ( sleep "$DEBOUNCE_SECONDS" && exec "$HOME/.local/bin/today-tasks" ) &
+    PENDING_FULL=1
+  else
+    ( sleep "$DEBOUNCE_SECONDS" && exec "$HOME/.local/bin/today-tasks" --skip-gcal ) &
+    PENDING_FULL=0
+  fi
+  PENDING_PID=$!
+done < <(inotifywait -m -r -q \
+  -e modify,close_write,create,delete,move \
+  --format '%w%f' \
+  "$VAULT_PATH")

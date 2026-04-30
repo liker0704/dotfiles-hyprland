@@ -224,7 +224,7 @@ Scope {
             actionId: "switch_mode_obsidian",
             name: "Switch to Obsidian mode",
             genericName: "Notes actions",
-            icon: "md.obsidian.Obsidian",
+            icon: "obsidian",
             keywords: "mode obsidian notes"
         },
         {
@@ -286,30 +286,67 @@ Scope {
     ]
 
     property var obsidianActions: [
+        // ───── Fast paths (Neovim) — for editing, capture, search ─────
+        {
+            entryType: "action",
+            actionId: "nvim_today",
+            name: "Open today (nvim)",
+            genericName: "kitty + nvim — instant",
+            icon: "view-calendar",
+            keywords: "nvim today daily fast"
+        },
+        {
+            entryType: "action",
+            actionId: "nvim_quick_capture",
+            name: "Quick capture (nvim)",
+            genericName: "kitty + nvim — fast write",
+            icon: "document-edit",
+            keywords: "nvim quick capture inbox fast"
+        },
+        {
+            entryType: "action",
+            actionId: "nvim_search",
+            name: "Search vault (nvim)",
+            genericName: "ObsidianSearch — ripgrep",
+            icon: "edit-find",
+            keywords: "nvim search ripgrep find fast"
+        },
+        {
+            entryType: "action",
+            actionId: "nvim_quickswitch",
+            name: "Quick switch (nvim)",
+            genericName: "ObsidianQuickSwitch — pick note",
+            icon: "go-jump",
+            keywords: "nvim switcher pick note fast"
+        },
+
+        // ───── Heavy paths (Obsidian GUI) — for browsing, plugins, graph ─────
         {
             entryType: "action",
             actionId: "open_vault",
-            name: "Open vault",
-            genericName: "MainVault",
-            icon: "md.obsidian.Obsidian",
-            keywords: "obsidian vault notes"
+            name: "Open vault (Obsidian)",
+            genericName: "MainVault — full GUI",
+            icon: "obsidian",
+            keywords: "obsidian vault notes gui"
         },
         {
             entryType: "action",
             actionId: "open_quick_capture",
-            name: "Open quick capture",
+            name: "Quick capture (Obsidian)",
             genericName: "00_Inbox/Quick Capture.md",
             icon: "document-edit",
-            keywords: "obsidian quick capture inbox"
+            keywords: "obsidian quick capture inbox gui"
         },
         {
             entryType: "action",
             actionId: "open_daily",
-            name: "Open today daily",
-            genericName: "01_Daily",
+            name: "Open today (Obsidian)",
+            genericName: "01_Daily — with plugins",
             icon: "view-calendar",
-            keywords: "obsidian daily today"
+            keywords: "obsidian daily today gui"
         },
+
+        // ───── Files / nav ─────
         {
             entryType: "action",
             actionId: "open_vault_folder",
@@ -636,13 +673,9 @@ Scope {
         return buildCombiEntries(queryText, queryLower)
     }
 
-    Process {
-        id: cmdProc
-    }
-
     function runCommand(cmd) {
-        cmdProc.command = ["bash", "-c", cmd]
-        cmdProc.running = true
+        console.log("[launcher] runCommand:", cmd)
+        Quickshell.execDetached(["bash", "-c", cmd])
         hide()
     }
 
@@ -692,10 +725,22 @@ Scope {
             runCommand("obsidian-notes")
             return
         case "open_quick_capture":
-            runCommand("xdg-open \"obsidian://open?vault=MainVault&file=00_Inbox%2FQuick%20Capture.md\"")
+            runCommand("obsidian-uri \"obsidian://open?vault=MainVault&file=00_Inbox%2FQuick%20Capture.md\"")
             return
         case "open_daily":
-            runCommand("today=$(date +%F); daily_file=\"$HOME/Notes/MainVault/01_Daily/$today.md\"; if [ ! -f \"$daily_file\" ]; then printf '# %s - Daily\\n\\n## Focus\\n-\\n\\n## Notes\\n-\\n\\n## Tasks\\n- [ ]\\n\\n## Links\\n-\\n' \"$today\" > \"$daily_file\"; fi; xdg-open \"obsidian://open?vault=MainVault&file=01_Daily%2F$today.md\"")
+            runCommand("today=$(date +%F); daily_file=\"$HOME/Notes/MainVault/01_Daily/$today.md\"; if [ ! -f \"$daily_file\" ]; then printf '# %s - Daily\\n\\n## Focus\\n-\\n\\n## Notes\\n-\\n\\n## Tasks\\n- [ ]\\n\\n## Links\\n-\\n' \"$today\" > \"$daily_file\"; fi; obsidian-uri \"obsidian://open?vault=MainVault&file=01_Daily%2F$today.md\"")
+            return
+        case "nvim_today":
+            runCommand("cd \"$HOME/Notes/MainVault\" && kitty --class obsidian-nvim -e nvim '+Obsidian today'")
+            return
+        case "nvim_quick_capture":
+            runCommand("cd \"$HOME/Notes/MainVault\" && kitty --class obsidian-nvim -e nvim \"$HOME/Notes/MainVault/00_Inbox/Quick Capture.md\"")
+            return
+        case "nvim_search":
+            runCommand("cd \"$HOME/Notes/MainVault\" && kitty --class obsidian-nvim -e nvim '+Obsidian search'")
+            return
+        case "nvim_quickswitch":
+            runCommand("cd \"$HOME/Notes/MainVault\" && kitty --class obsidian-nvim -e nvim '+Obsidian quick_switch'")
             return
         case "open_vault_folder":
             runCommand("xdg-open \"$HOME/Notes/MainVault\"")
