@@ -10,18 +10,17 @@
 -- Hide tmux status bar while nvim is open.
 -- This file loads on VeryLazy (after VimEnter), so we hide immediately rather than
 -- via a VimEnter autocmd that would never fire.
--- IMPORTANT: use session-local `set-option` (without -g). With -g, tmux only changes
--- the global default and may not affect the current session if it has local overrides.
-local function tmux_hide()
-  if vim.env.TMUX then
-    os.execute("tmux set-option -q status off")
+-- IMPORTANT: target via $TMUX_PANE, not bare `set-option`. Without -t, tmux applies
+-- the change to the "current" session (last attached client), which may NOT be the
+-- session containing this nvim. $TMUX_PANE uniquely identifies the pane → session.
+local function tmux_set(state)
+  local pane = vim.env.TMUX_PANE
+  if vim.env.TMUX and pane then
+    os.execute("tmux set-option -q -t " .. vim.fn.shellescape(pane) .. " status " .. state)
   end
 end
-local function tmux_show()
-  if vim.env.TMUX then
-    os.execute("tmux set-option -q status on")
-  end
-end
+local function tmux_hide() tmux_set("off") end
+local function tmux_show() tmux_set("on") end
 tmux_hide()
 local tmux_status = vim.api.nvim_create_augroup("tmux_status", { clear = true })
 vim.api.nvim_create_autocmd("VimResume", { group = tmux_status, callback = tmux_hide })
