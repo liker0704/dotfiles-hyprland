@@ -7,7 +7,7 @@ Singleton {
     id: root
 
     property list<var> notifications: []
-    property bool doNotDisturb: false
+    property bool doNotDisturb: FocusModeState.active
     readonly property int count: notifications.length
     property int _seq: 0
 
