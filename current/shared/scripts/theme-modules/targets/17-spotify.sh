@@ -122,7 +122,14 @@ EOF
 # without it spicetify prints a scary "fatal: permission denied". Suppress
 # stdout too so target output stays clean — user sees green label only.
 spicetify config current_theme Generated >/dev/null 2>&1
-spicetify apply >/dev/null 2>&1
+# Offline swap: only restart (and thus launch) Spotify when it's already
+# running. When closed, patch with --no-restart so the new theme is staged for
+# the next manual launch instead of popping Spotify open on every theme sync.
+if pgrep -x spotify >/dev/null 2>&1; then
+    spicetify apply >/dev/null 2>&1
+else
+    spicetify apply -n >/dev/null 2>&1
+fi
 
 # Detect missing perms so user gets an actionable hint instead of silence.
 if [[ ! -w /opt/spotify/Apps/xpui.spa ]]; then
