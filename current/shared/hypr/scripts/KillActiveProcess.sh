@@ -43,7 +43,22 @@ if [[ "$active_class" =~ $TERMINAL_CLASSES_REGEX ]]; then
     if [[ -n "$tmux_client_pid" ]]; then
         session_id=$(tmux list-clients -F '#{client_pid} #{session_id}' 2>/dev/null \
             | awk -v p="$tmux_client_pid" '$1 == p { print $2; exit }')
-        [[ -n "$session_id" ]] && tmux kill-session -t "$session_id" 2>/dev/null
+        if [[ -n "$session_id" ]]; then
+            # Snapshot the session before killing so it can be revived later.
+            # continuum's 5-min autosave would otherwise drop the killed session
+            # from its restore file, making it unrecoverable. One line per
+            # window: "name|cwd". Revive via the session picker (Alt+S) — killed
+            # sessions show with a 💀 marker.
+            session_name=$(tmux display-message -p -t "$session_id" '#{session_name}' 2>/dev/null)
+            if [[ -n "$session_name" ]]; then
+                grave="$HOME/.local/state/tmux/graveyard"
+                mkdir -p "$grave"
+                tmux list-windows -t "$session_id" \
+                    -F '#{window_name}|#{pane_current_path}' 2>/dev/null \
+                    > "$grave/$session_name"
+            fi
+            tmux kill-session -t "$session_id" 2>/dev/null
+        fi
     fi
 fi
 
